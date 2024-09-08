@@ -37,3 +37,11 @@
 .error {
   @apply text-red-500 font-bold mt-4;
 }
+
+.th {
+  @apply border p-2 cursor-pointer hover:bg-gray-100 text-left;
+}
+
+.th:hover {
+  @apply bg-gray-200;
+}

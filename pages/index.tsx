@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { getPreviousTradingDate } from '../utils/dateUtils';
-import { GapUpStockResult } from '../models/GapUpStockResult';
+import { GapUpStockResult, columnNames } from '../models/GapUpStockResult';
+import { sortResults, SortConfig } from '../utils/resultGrid';
 import styles from '../styles/Home.module.css';
 
 export default function Home() {
@@ -10,6 +11,7 @@ export default function Home() {
   const [results, setResults] = useState<GapUpStockResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'ascending' });
 
   useEffect(() => {
     const lastTradingDate = getPreviousTradingDate();
@@ -22,6 +24,7 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setResults([]); // 清除現有結果
 
     try {
       const response = await fetch(`/api/stockScanner?fromDate=${fromDate}&toDate=${toDate}`);
@@ -30,13 +33,29 @@ export default function Home() {
         throw new Error(errorData.error || 'An error occurred while fetching data');
       }
       const data = await response.json();
-      setResults(data);
+      const sortedData = sortResults(data, sortConfig);
+      setResults(sortedData);
     } catch (error: unknown) {
       console.error('Error fetching results:', error);
       setError(error instanceof Error ? error.message : 'An unknown error occurred');
     }
 
     setLoading(false);
+  };
+
+  const handleSort = (key: keyof GapUpStockResult) => {
+    const direction = sortConfig.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+    const newSortConfig: SortConfig = { key, direction };
+    setSortConfig(newSortConfig);
+    const sortedResults = sortResults(results, newSortConfig);
+    setResults(sortedResults);
+  };
+
+  const getSortIndicator = (key: keyof GapUpStockResult) => {
+    if (sortConfig.key === key) {
+      return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+    }
+    return '';
   };
 
   return (
@@ -77,22 +96,24 @@ export default function Home() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th className={styles.th}>Ticker</th>
-                <th className={styles.th}>Date</th>
-                <th className={styles.th}>Gap Up %</th>
-                <th className={styles.th}>Open</th>
-                <th className={styles.th}>Close</th>
-                <th className={styles.th}>High</th>
-                <th className={styles.th}>Low</th>
-                <th className={styles.th}>Spike %</th>
-                <th className={styles.th}>O2C %</th>
+                {Object.keys(columnNames).map((key) => (
+                  <th 
+                    key={key} 
+                    className={styles.th} 
+                    onClick={() => handleSort(key as keyof GapUpStockResult)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {columnNames[key as keyof GapUpStockResult]}
+                    {getSortIndicator(key as keyof GapUpStockResult)}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {results.map((stock, index) => (
                 <tr key={index}>
                   <td className={styles.td}>{stock.ticker}</td>
-                  <td className={styles.td}>{new Date(stock.date).toLocaleDateString()}</td>
+                  <td className={styles.td}>{stock.date}</td> {/* 直接使用 stock.date，不進行轉換 */}
                   <td className={styles.td}>{stock.gapUpPercentage}%</td>
                   <td className={styles.td}>{stock.open.toFixed(2)}</td>
                   <td className={styles.td}>{stock.close.toFixed(2)}</td>
