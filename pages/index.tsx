@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { getPreviousTradingDate } from '../utils/dateUtils';
 import { setLastMonth, setLastWeek, setYesterday, sortResults, SortConfig } from '../utils/resultGrid';
 import styles from '../styles/Home.module.css';
@@ -115,12 +116,24 @@ export default function Home() {
     setCurrentPage(page);
   };
 
+  useEffect(() => {
+    // This effect will run whenever progress or currentDate changes
+    // You can add any additional logic here if needed
+  }, [progress, currentDate]);
+
   return (
     <div className={styles.container}>
       <Head>
         <title>Stock Gap Up Scanner</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
+
+      <nav className={styles.navigation}>
+        <Link href="/" className={styles.navButton}>
+          Stock Gap Up Scanner
+        </Link>
+        {/* Add more navigation items here if needed */}
+      </nav>
 
       <main className={styles.main}>
         <h1 className={styles.title}>
@@ -161,7 +174,7 @@ export default function Home() {
 
         {loading && (
           <div className={styles.loadingContainer}>
-            <p>Loading... {progress}% complete</p>
+            <p>Loading... {progress.toFixed(2)}% complete</p>
             <p>Processing date: {currentDate}</p>
             <div className={styles.progressBar}>
               <div className={styles.progressFill} style={{ width: `${progress}%` }}></div>
@@ -200,6 +213,9 @@ export default function Home() {
                     <td className={styles.td}>{stock.low.toFixed(2)}</td>
                     <td className={styles.td}>{stock.spikePercentage}%</td>
                     <td className={styles.td}>{stock.o2cPercentage}%</td>
+                    <td className={styles.td}>{(stock.volume ?? 0).toLocaleString()}</td>
+                    <td className={styles.td}>{(stock.float ?? 0).toLocaleString()}</td>
+                    <td className={styles.td}>{(stock.marketCap ?? 0).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

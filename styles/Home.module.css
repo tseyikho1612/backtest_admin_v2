@@ -3,7 +3,7 @@
 }
 
 .main {
-  @apply py-8;
+  @apply pt-0 pb-8;
 }
 
 .title {
@@ -32,6 +32,7 @@
 
 .table {
   @apply w-full border-collapse;
+  min-width: 1200px; /* Adjust this value based on your needs */
 }
 
 .th, .td {
@@ -60,6 +61,7 @@
 
 .tableContainer {
   @apply overflow-x-auto border-2 border-gray-300 rounded-lg;
+  max-width: 100%;
 }
 
 .pagination {
@@ -100,4 +102,12 @@
 .pagination {
   display: flex;
   gap: 5px;
+}
+
+.navigation {
+  @apply bg-gray-800 py-4 px-6 mb-8;
+}
+
+.navButton {
+  @apply text-white font-semibold hover:text-gray-300 transition-colors duration-200;
 }

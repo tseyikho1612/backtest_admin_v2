@@ -42,12 +42,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         polygonClient.stocks.aggregatesGroupedDaily(formattedPreviousDate, { adjusted: 'true' }),
       ]);
 
-      const gapUps = calculateGapUps(currentDayData.results, previousDayData.results, formattedDate);
-      results.push(...gapUps);
-
       processedDays++;
-      const progress = Math.round((processedDays / totalDays) * 100);
-      res.write(`data: ${JSON.stringify({ progress, currentDate: formattedDate })}\n\n`);      
+      const progress = (processedDays / totalDays) * 100;
+      res.write(`data: ${JSON.stringify({ progress, currentDate: formattedDate })}\n\n`);
+
+      const gapUps = await calculateGapUps(currentDayData.results, previousDayData.results, formattedDate);
+      results.push(...gapUps);
 
       // Add a small delay to allow the client to process the event
       await new Promise(resolve => setTimeout(resolve, 10));
@@ -64,11 +64,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-function calculateGapUps(currentDay: any[], previousDay: any[], currentDate: string): GapUpStockResult[] {
+async function calculateGapUps(currentDay: any[], previousDay: any[], currentDate: string): Promise<GapUpStockResult[]> {
   const gapUps: GapUpStockResult[] = [];
 
   for (const stock of currentDay) {
-    // 跳過超過 4 個字母的股票代碼
     if (stock.T.length > 4) continue;
 
     const prevDayStock = previousDay.find((s: any) => s.T === stock.T);
@@ -78,9 +77,21 @@ function calculateGapUps(currentDay: any[], previousDay: any[], currentDate: str
         const spikePercentage = ((stock.h - stock.o) / stock.o) * 100;
         const o2cPercentage = ((stock.c - stock.o) / stock.o) * 100;
 
+        // Fetch additional details
+
+        var float: number | null = 0;
+        var marketCap: number | null = 0;
+        try {   
+          const tickerDetails = await polygonClient.reference.tickerDetails(stock.T);
+          float = tickerDetails.results?.weighted_shares_outstanding || null;
+          marketCap = tickerDetails.results?.market_cap || null;
+        } catch (error) {
+          console.error('Error fetching ticker details:', error);
+        }
+
         gapUps.push({
           ticker: stock.T,
-          date: currentDate, // 使用傳入的日期，而不是 stock.t
+          date: currentDate,
           gapUpPercentage: gapUpPercentage.toFixed(2),
           open: stock.o,
           close: stock.c,
@@ -88,6 +99,9 @@ function calculateGapUps(currentDay: any[], previousDay: any[], currentDate: str
           low: stock.l,
           spikePercentage: spikePercentage.toFixed(2),
           o2cPercentage: o2cPercentage.toFixed(2),
+          volume: stock.v,          
+          float: float,
+          marketCap: marketCap,
         });
       }
     }

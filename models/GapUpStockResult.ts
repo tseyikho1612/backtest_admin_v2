@@ -8,6 +8,9 @@ export interface GapUpStockResult {
   low: number;
   spikePercentage: string;
   o2cPercentage: string;
+  volume: number;
+  float: number | null;
+  marketCap: number | null;
 }
 
 export const columnNames: { [key: string]: string } = {
@@ -20,5 +23,8 @@ export const columnNames: { [key: string]: string } = {
   high: 'High',
   low: 'Low',
   spikePercentage: 'Spike %',
-  o2cPercentage: 'O2C %'
+  o2cPercentage: 'O2C %',
+  volume: 'Volume',
+  float: 'Float',
+  marketCap: 'Market Cap'
 };
