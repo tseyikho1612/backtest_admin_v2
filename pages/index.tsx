@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { getPreviousTradingDate } from '../utils/dateUtils';
-import { GapUpStockResult, columnNames } from '../models/GapUpStockResult';
-import { sortResults, SortConfig, setLastMonth, setLastWeek, setYesterday } from '../utils/resultGrid';
+import { setLastMonth, setLastWeek, setYesterday, sortResults, SortConfig } from '../utils/resultGrid';
 import styles from '../styles/Home.module.css';
+import { GapUpStockResult, columnNames } from '../models/GapUpStockResult';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -15,6 +15,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'ascending' });
   const [currentPage, setCurrentPage] = useState(1);
+  const [progress, setProgress] = useState(0);
+  const [currentDate, setCurrentDate] = useState('');
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     const lastTradingDate = getPreviousTradingDate();
@@ -27,24 +30,47 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setResults([]); // 清除現有結果
+    setResults([]);
+    setProgress(0);
+    setCurrentDate('');
 
-    try {
-      const response = await fetch(`/api/stockScanner?fromDate=${fromDate}&toDate=${toDate}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'An error occurred while fetching data');
-      }
-      const data = await response.json();
-      const sortedData = sortResults(data, sortConfig);
-      setResults(sortedData);
-    } catch (error: unknown) {
-      console.error('Error fetching results:', error);
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
     }
 
-    setLoading(false);
+    const eventSource = new EventSource(`/api/stockScanner?fromDate=${fromDate}&toDate=${toDate}`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.progress !== undefined) {
+        setProgress(data.progress);
+        setCurrentDate(data.currentDate || '');
+      } else if (data.finished) {
+        setResults(sortResults(data.results, sortConfig));
+        setLoading(false);
+        eventSource.close();
+      } else if (data.error) {
+        setError(data.error);
+        setLoading(false);
+        eventSource.close();
+      }
+    };
+
+    eventSource.onerror = () => {
+      setError('An error occurred while fetching data');
+      setLoading(false);
+      eventSource.close();
+    };
   };
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
 
   const handleSort = (key: keyof GapUpStockResult) => {
     const direction = sortConfig.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
@@ -133,7 +159,15 @@ export default function Home() {
           </div>
         </form>
 
-        {loading && <p>Loading...</p>}
+        {loading && (
+          <div className={styles.loadingContainer}>
+            <p>Loading... {progress}% complete</p>
+            <p>Processing date: {currentDate}</p>
+            <div className={styles.progressBar}>
+              <div className={styles.progressFill} style={{ width: `${progress}%` }}></div>
+            </div>
+          </div>
+        )}
         {error && <p className={styles.error}>{error}</p>}
 
         {results.length > 0 && (
@@ -170,19 +204,24 @@ export default function Home() {
                 ))}
               </tbody>
             </table>
-            {pageCount > 1 && (
-              <div className={styles.pagination}>
-                {Array.from({ length: pageCount }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => handlePageChange(page)}
-                    className={`${styles.pageButton} ${currentPage === page ? styles.activePage : ''}`}
-                  >
-                    {page}
-                  </button>
-                ))}
+            <div className={styles.tableFooter}>
+              <div className={styles.totalRecords}>
+                Total Records: {results.length}
               </div>
-            )}
+              {pageCount > 1 && (
+                <div className={styles.pagination}>
+                  {Array.from({ length: pageCount }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`${styles.pageButton} ${currentPage === page ? styles.activePage : ''}`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>

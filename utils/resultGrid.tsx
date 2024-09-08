@@ -1,5 +1,4 @@
 import { GapUpStockResult } from '../models/GapUpStockResult';
-import { getPreviousTradingDate } from './dateUtils';
 
 export type SortConfig = {
   key: keyof GapUpStockResult;
@@ -8,19 +7,9 @@ export type SortConfig = {
 
 export function sortResults(results: GapUpStockResult[], sortConfig: SortConfig): GapUpStockResult[] {
   return [...results].sort((a, b) => {
-    if (sortConfig.key === 'ticker') {
-      return sortConfig.direction === 'ascending' 
-        ? a[sortConfig.key].localeCompare(b[sortConfig.key])
-        : b[sortConfig.key].localeCompare(a[sortConfig.key]);
-    } else if (sortConfig.key === 'date') {
-      return sortConfig.direction === 'ascending'
-        ? new Date(a[sortConfig.key]).getTime() - new Date(b[sortConfig.key]).getTime()
-        : new Date(b[sortConfig.key]).getTime() - new Date(a[sortConfig.key]).getTime();
-    } else {
-      return sortConfig.direction === 'ascending'
-        ? Number(a[sortConfig.key]) - Number(b[sortConfig.key])
-        : Number(b[sortConfig.key]) - Number(a[sortConfig.key]);
-    }
+    if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'ascending' ? -1 : 1;
+    if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'ascending' ? 1 : -1;
+    return 0;
   });
 }
 
@@ -44,7 +33,8 @@ export function setLastWeek(): { fromDate: string; toDate: string } {
 }
 
 export function setYesterday(): { fromDate: string; toDate: string } {
-  const yesterday = getPreviousTradingDate();
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
   const formattedDate = yesterday.toISOString().split('T')[0];
   return {
     fromDate: formattedDate,

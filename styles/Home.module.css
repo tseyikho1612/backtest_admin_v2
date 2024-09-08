@@ -73,3 +73,31 @@
 .activePage {
   @apply bg-blue-500 text-white hover:bg-blue-600;
 }
+
+.loadingContainer {
+  @apply mt-4 text-center;
+}
+
+.progressBar {
+  @apply w-full h-4 bg-gray-200 rounded-full mt-2;
+}
+
+.progressFill {
+  @apply h-full bg-blue-500 rounded-full transition-all duration-300 ease-in-out;
+}
+
+.tableFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.totalRecords {
+  font-weight: bold;
+}
+
+.pagination {
+  display: flex;
+  gap: 5px;
+}

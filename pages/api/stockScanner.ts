@@ -12,16 +12,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing date parameters' });
   }
 
+  // Set up SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
   try {
-    console.log(`Fetching data from ${fromDate} to ${toDate}`);
     const results = [];
     let currentDate = new Date(fromDate as string);
     const endDate = new Date(toDate as string);
+    const totalDays = Math.ceil((endDate.getTime() - currentDate.getTime()) / (1000 * 3600 * 24)) + 1;
+    let processedDays = 0;
 
     while (currentDate <= endDate) {
       if (!isTradingDate(currentDate)) {
-        console.log(`Skipping non-trading date: ${currentDate.toISOString().split('T')[0]}`);
         currentDate.setDate(currentDate.getDate() + 1);
+        processedDays++;
         continue;
       }
 
@@ -29,24 +37,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const previousDate = getPreviousTradingDate(currentDate);
       const formattedPreviousDate = previousDate.toISOString().split('T')[0];
 
-      console.log(`Fetching data for ${formattedDate} and ${formattedPreviousDate}`);
       const [currentDayData, previousDayData] = await Promise.all([
         polygonClient.stocks.aggregatesGroupedDaily(formattedDate, { adjusted: 'true' }),
         polygonClient.stocks.aggregatesGroupedDaily(formattedPreviousDate, { adjusted: 'true' }),
       ]);
 
-      console.log(`Calculating gap ups for ${formattedDate}`);
       const gapUps = calculateGapUps(currentDayData.results, previousDayData.results, formattedDate);
       results.push(...gapUps);
+
+      processedDays++;
+      const progress = Math.round((processedDays / totalDays) * 100);
+      res.write(`data: ${JSON.stringify({ progress, currentDate: formattedDate })}\n\n`);      
+
+      // Add a small delay to allow the client to process the event
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    console.log(`Returning ${results.length} results`);
-    res.status(200).json(results);
+    res.write(`data: ${JSON.stringify({ finished: true, results })}\n\n`);
   } catch (error: unknown) {
     console.error('Error fetching stock data:', error);
-    res.status(500).json({ error: 'Error fetching stock data', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.write(`data: ${JSON.stringify({ error: 'Error fetching stock data' })}\n\n`);
+  } finally {
+    res.end();
   }
 }
 
