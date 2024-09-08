@@ -10,7 +10,8 @@ export interface GapUpStockResult {
   o2cPercentage: string;
 }
 
-export const columnNames: { [key in keyof GapUpStockResult]: string } = {
+export const columnNames: { [key: string]: string } = {
+  rowNumber: 'Row',
   ticker: 'Ticker',
   date: 'Date',
   gapUpPercentage: 'Gap Up %',

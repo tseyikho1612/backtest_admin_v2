@@ -10,6 +10,10 @@
   @apply text-3xl font-bold mb-4;
 }
 
+.highlight {
+  @apply text-red-500;
+}
+
 .form {
   @apply mb-8;
 }
@@ -31,7 +35,7 @@
 }
 
 .th, .td {
-  @apply border p-2;
+  @apply border border-gray-300 p-2;
 }
 
 .error {
@@ -39,9 +43,33 @@
 }
 
 .th {
-  @apply border p-2 cursor-pointer hover:bg-gray-100 text-left;
+  @apply bg-gray-100 font-semibold text-left cursor-pointer hover:bg-gray-200;
 }
 
 .th:hover {
   @apply bg-gray-200;
+}
+
+.shortcutButtons {
+  @apply mt-4 flex space-x-2;
+}
+
+.shortcutButton {
+  @apply bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-300;
+}
+
+.tableContainer {
+  @apply overflow-x-auto border-2 border-gray-300 rounded-lg;
+}
+
+.pagination {
+  @apply flex justify-center mt-4 space-x-2;
+}
+
+.pageButton {
+  @apply px-3 py-1 border border-gray-300 rounded hover:bg-gray-100;
+}
+
+.activePage {
+  @apply bg-blue-500 text-white hover:bg-blue-600;
 }
