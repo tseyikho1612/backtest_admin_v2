@@ -48,7 +48,11 @@ export default function Home() {
         setProgress(data.progress);
         setCurrentDate(data.currentDate || '');
       } else if (data.finished) {
-        setResults(sortResults(data.results, sortConfig));
+        if (data.results.length === 0) {
+          setError("No data meet the criteria");
+        } else {
+          setResults(sortResults(data.results, sortConfig));
+        }
         setLoading(false);
         eventSource.close();
       } else if (data.error) {
