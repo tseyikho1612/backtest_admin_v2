@@ -5,6 +5,7 @@ import { getPreviousTradingDate } from '../utils/dateUtils';
 import { setLastMonth, setLastWeek, setYesterday, sortResults, SortConfig } from '../utils/resultGrid';
 import styles from '../styles/Home.module.css';
 import { GapUpStockResult, columnNames } from '../models/GapUpStockResult';
+import { checkResultsExist, saveResults, getResultsFromDatabase } from '../utils/databaseUtils';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -35,38 +36,57 @@ export default function Home() {
     setProgress(0);
     setCurrentDate('');
 
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
+    try {
+      // Check if results exist in the database
+      const resultsExist = await checkResultsExist(fromDate, toDate);
 
-    const eventSource = new EventSource(`/api/stockScanner?fromDate=${fromDate}&toDate=${toDate}`);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.progress !== undefined) {
-        setProgress(data.progress);
-        setCurrentDate(data.currentDate || '');
-      } else if (data.finished) {
-        if (data.results.length === 0) {
-          setError("No data meet the criteria");
-        } else {
-          setResults(sortResults(data.results, sortConfig));
+      if (resultsExist) {
+        // Fetch results from the database
+        const dbResults = await getResultsFromDatabase(fromDate, toDate);
+        setResults(sortResults(dbResults, sortConfig));
+        setLoading(false);
+      } else {
+        // Fetch results from API
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
         }
-        setLoading(false);
-        eventSource.close();
-      } else if (data.error) {
-        setError(data.error);
-        setLoading(false);
-        eventSource.close();
-      }
-    };
 
-    eventSource.onerror = () => {
-      setError('An error occurred while fetching data');
+        const eventSource = new EventSource(`/api/stockScanner?fromDate=${fromDate}&toDate=${toDate}`);
+        eventSourceRef.current = eventSource;
+
+        eventSource.onmessage = async (event) => {
+          const data = JSON.parse(event.data);
+          if (data.progress !== undefined) {
+            setProgress(data.progress);
+            setCurrentDate(data.currentDate || '');
+          } else if (data.finished) {
+            if (data.results.length === 0) {
+              setError("No data meet the criteria");
+            } else {
+              const sortedResults = sortResults(data.results, sortConfig);
+              setResults(sortedResults);
+              // Save results to the database
+              await saveResults(fromDate, toDate, sortedResults);
+            }
+            setLoading(false);
+            eventSource.close();
+          } else if (data.error) {
+            setError(data.error);
+            setLoading(false);
+            eventSource.close();
+          }
+        };
+
+        eventSource.onerror = () => {
+          setError('An error occurred while fetching data');
+          setLoading(false);
+          eventSource.close();
+        };
+      }
+    } catch (error) {
+      setError('An error occurred while processing your request');
       setLoading(false);
-      eventSource.close();
-    };
+    }
   };
 
   useEffect(() => {
