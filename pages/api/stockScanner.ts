@@ -58,7 +58,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.write(`data: ${JSON.stringify({ finished: true, results })}\n\n`);
   } catch (error: unknown) {
     console.error('Error fetching stock data:', error);
-    res.write(`data: ${JSON.stringify({ error: 'Error fetching stock data' })}\n\n`);
+    let errorMessage = 'Error fetching stock data';
+    if (error instanceof Error) {
+      errorMessage += `: ${error.message}`;
+    }
+    res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
   } finally {
     res.end();
   }
@@ -78,7 +82,6 @@ async function calculateGapUps(currentDay: any[], previousDay: any[], currentDat
         const o2cPercentage = ((stock.c - stock.o) / stock.o) * 100;
 
         // Fetch additional details
-
         var float: number | null = 0;
         var marketCap: number | null = 0;
         try {   
@@ -86,22 +89,22 @@ async function calculateGapUps(currentDay: any[], previousDay: any[], currentDat
           float = tickerDetails.results?.weighted_shares_outstanding || null;
           marketCap = tickerDetails.results?.market_cap || null;
         } catch (error) {
-          console.error('Error fetching ticker details:', error);
+          console.error(`Error fetching ticker details for ${stock.T}:`, error);
         }
 
         gapUps.push({
           ticker: stock.T,
           date: currentDate,
-          gapUpPercentage: gapUpPercentage.toFixed(2),
+          gap_up_percentage: gapUpPercentage,
           open: stock.o,
           close: stock.c,
           high: stock.h,
           low: stock.l,
-          spikePercentage: spikePercentage.toFixed(2),
-          o2cPercentage: o2cPercentage.toFixed(2),
+          spike_percentage: spikePercentage,
+          o2c_percentage: o2cPercentage,
           volume: stock.v,          
           float: float,
-          marketCap: marketCap,
+          market_cap: marketCap,
         });
       }
     }

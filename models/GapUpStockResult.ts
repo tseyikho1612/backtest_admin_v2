@@ -1,30 +1,30 @@
 export interface GapUpStockResult {
   ticker: string;
   date: string;
-  gapUpPercentage: string;
+  gap_up_percentage: number;
   open: number;
   close: number;
   high: number;
   low: number;
-  spikePercentage: string;
-  o2cPercentage: string;
+  spike_percentage: number;
+  o2c_percentage: number;
   volume: number;
   float: number | null;
-  marketCap: number | null;
+  market_cap: number | null;
 }
 
 export const columnNames: { [key: string]: string } = {
-  rowNumber: 'Row',
+  rowNumber: '#',
   ticker: 'Ticker',
   date: 'Date',
-  gapUpPercentage: 'Gap Up %',
+  gap_up_percentage: 'Gap Up %',
   open: 'Open',
   close: 'Close',
   high: 'High',
   low: 'Low',
-  spikePercentage: 'Spike %',
-  o2cPercentage: 'O2C %',
+  spike_percentage: 'Spike %',
+  o2c_percentage: 'O2C %',
   volume: 'Volume',
   float: 'Float',
-  marketCap: 'Market Cap'
+  market_cap: 'Market Cap'
 };

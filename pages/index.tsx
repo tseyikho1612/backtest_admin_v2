@@ -229,17 +229,17 @@ export default function Home() {
                   <tr key={index}>
                     <td className={styles.td}>{(currentPage - 1) * ITEMS_PER_PAGE + index + 1}</td>
                     <td className={styles.td}>{stock.ticker}</td>
-                    <td className={styles.td}>{stock.date}</td>
-                    <td className={styles.td}>{stock.gapUpPercentage}%</td>
+                    <td className={styles.td}>{new Date(stock.date).toISOString().split('T')[0]}</td>
+                    <td className={styles.td}>{stock.gap_up_percentage.toFixed(2)}%</td>
                     <td className={styles.td}>{stock.open.toFixed(2)}</td>
                     <td className={styles.td}>{stock.close.toFixed(2)}</td>
                     <td className={styles.td}>{stock.high.toFixed(2)}</td>
                     <td className={styles.td}>{stock.low.toFixed(2)}</td>
-                    <td className={styles.td}>{stock.spikePercentage}%</td>
-                    <td className={styles.td}>{stock.o2cPercentage}%</td>
-                    <td className={styles.td}>{(stock.volume ?? 0).toLocaleString()}</td>
-                    <td className={styles.td}>{(stock.float ?? 0).toLocaleString()}</td>
-                    <td className={styles.td}>{(stock.marketCap ?? 0).toLocaleString()}</td>
+                    <td className={styles.td}>{stock.spike_percentage.toFixed(2)}%</td>
+                    <td className={styles.td}>{stock.o2c_percentage.toFixed(2)}%</td>
+                    <td className={styles.td}>{stock.volume.toLocaleString()}</td>
+                    <td className={styles.td}>{stock.float ? stock.float.toLocaleString() : 'N/A'}</td>
+                    <td className={styles.td}>{stock.market_cap ? stock.market_cap.toLocaleString() : 'N/A'}</td>
                   </tr>
                 ))}
               </tbody>
