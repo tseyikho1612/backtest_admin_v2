@@ -6,6 +6,7 @@ import { setLastMonth, setLastWeek, setYesterday, sortResults, SortConfig } from
 import styles from '../styles/Home.module.css';
 import { GapUpStockResult, columnNames } from '../models/GapUpStockResult';
 import { checkResultsExist, saveResults, getResultsFromDatabase } from '../utils/databaseUtils';
+import { isTradingDate } from '../utils/dateUtils';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -38,53 +39,66 @@ export default function Home() {
 
     try {
       // Check if results exist in the database
-      const resultsExist = await checkResultsExist(fromDate, toDate);
+      const response = await fetch(`/api/checkResults?fromDate=${fromDate}&toDate=${toDate}`);
+      const dateExistence: { [date: string]: boolean } = await response.json();
 
-      if (resultsExist) {
-        // Fetch results from the database
-        const dbResults = await getResultsFromDatabase(fromDate, toDate);
-        setResults(sortResults(dbResults, sortConfig));
-        setLoading(false);
-      } else {
-        // Fetch results from API
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-        }
+      let allResults: GapUpStockResult[] = [];
 
-        const eventSource = new EventSource(`/api/stockScanner?fromDate=${fromDate}&toDate=${toDate}`);
-        eventSourceRef.current = eventSource;
-
-        eventSource.onmessage = async (event) => {
-          const data = JSON.parse(event.data);
-          if (data.progress !== undefined) {
-            setProgress(data.progress);
-            setCurrentDate(data.currentDate || '');
-          } else if (data.finished) {
-            if (data.results.length === 0) {
-              setError("No data meet the criteria");
-            } else {
-              const sortedResults = sortResults(data.results, sortConfig);
-              setResults(sortedResults);
-              // Save results to the database
-              await saveResults(fromDate, toDate, sortedResults);
-            }
-            setLoading(false);
-            eventSource.close();
-          } else if (data.error) {
-            setError(data.error);
-            setLoading(false);
-            eventSource.close();
+      for (const [date, exists] of Object.entries(dateExistence)) {
+        if (exists) {
+          // Fetch results from the database for this date
+          const dbResponse = await fetch(`/api/getResults?fromDate=${date}&toDate=${date}`);
+          const { results: dbResults } = await dbResponse.json();
+          allResults = [...allResults, ...dbResults];
+        } else if (isTradingDate(new Date(date))) {
+          // Fetch results from API for this date
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
           }
-        };
 
-        eventSource.onerror = () => {
-          setError('An error occurred while fetching data');
-          setLoading(false);
-          eventSource.close();
-        };
+          const eventSource = new EventSource(`/api/stockScanner?fromDate=${date}&toDate=${date}`);
+          eventSourceRef.current = eventSource;
+
+          await new Promise((resolve, reject) => {
+            eventSource.onmessage = async (event) => {
+              const data = JSON.parse(event.data);
+              if (data.progress !== undefined) {
+                setProgress(data.progress);
+                setCurrentDate(data.currentDate || '');
+              } else if (data.finished) {
+                allResults = [...allResults, ...data.results];
+                eventSource.close();
+                resolve(null);
+              } else if (data.error) {
+                setError(data.error);
+                eventSource.close();
+                reject(new Error(data.error));
+              }
+            };
+
+            eventSource.onerror = () => {
+              reject(new Error('An error occurred while fetching data'));
+            };
+          });
+        }
+      }
+
+      if (allResults.length === 0) {
+        setError("No data meet the criteria");
+      } else {
+        const sortedResults = sortResults(allResults, sortConfig);
+        setResults(sortedResults);
+        // Save results to the database
+        await fetch('/api/saveResults', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromDate, toDate, results: sortedResults }),
+        });
       }
     } catch (error) {
       setError('An error occurred while processing your request');
+      console.error(error);
+    } finally {
       setLoading(false);
     }
   };

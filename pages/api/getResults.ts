@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const result = await client.query(
       `SELECT 
         ticker, 
-        date, 
+        TO_CHAR(date AT TIME ZONE 'Asia/Hong_Kong', 'YYYY-MM-DD') as date,
         CAST(gap_up_percentage AS FLOAT) AS gap_up_percentage,
         CAST(open AS FLOAT) AS open,
         CAST(close AS FLOAT) AS close,
@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         CAST(volume AS BIGINT) AS volume,
         CAST(float AS BIGINT) AS float,
         CAST(market_cap AS BIGINT) AS market_cap
-      FROM stock_results 
+      FROM "GapUpShort" 
       WHERE date BETWEEN $1 AND $2 
       ORDER BY date, ticker`,
       [fromDate, toDate]
