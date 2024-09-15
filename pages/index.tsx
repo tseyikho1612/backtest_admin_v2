@@ -7,8 +7,18 @@ import styles from '../styles/Home.module.css';
 import { GapUpStockResult, columnNames } from '../models/GapUpStockResult';
 import { checkResultsExist, saveResults, getResultsFromDatabase } from '../utils/databaseUtils';
 import { isTradingDate } from '../utils/dateUtils';
+import { GetStaticProps } from 'next';
 
 const ITEMS_PER_PAGE = 20;
+
+export const getStaticProps: GetStaticProps = async () => {
+  // Fetch any data you need for the home page
+  return {
+    props: {
+      // Your props here
+    },
+  };
+};
 
 export default function Home() {
   const [fromDate, setFromDate] = useState('');
@@ -71,14 +81,16 @@ export default function Home() {
                 eventSource.close();
                 resolve(null);
               } else if (data.error) {
-                setError(data.error);
+                console.error('Error from server:', data.error);
+                setError(`Error: ${data.error}`);
                 eventSource.close();
                 reject(new Error(data.error));
               }
             };
 
-            eventSource.onerror = () => {
-              reject(new Error('An error occurred while fetching data'));
+            eventSource.onerror = (err) => {
+              console.error('EventSource error:', err);
+              reject(new Error('An error occurred while fetching data. Please try again.'));
             };
           });
         }

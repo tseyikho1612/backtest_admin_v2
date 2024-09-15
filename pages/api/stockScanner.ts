@@ -37,28 +37,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const previousDate = getPreviousTradingDate(currentDate);
       const formattedPreviousDate = previousDate.toISOString().split('T')[0];
 
-      const [currentDayData, previousDayData] = await Promise.all([
-        polygonClient.stocks.aggregatesGroupedDaily(formattedDate, { adjusted: 'true' }),
-        polygonClient.stocks.aggregatesGroupedDaily(formattedPreviousDate, { adjusted: 'true' }),
-      ]);
+      try {
+        const [currentDayData, previousDayData] = await Promise.all([
+          polygonClient.stocks.aggregatesGroupedDaily(formattedDate, { adjusted: 'true' }),
+          polygonClient.stocks.aggregatesGroupedDaily(formattedPreviousDate, { adjusted: 'true' }),
+        ]);
 
-      processedDays++;
-      const progress = (processedDays / totalDays) * 100;
-      res.write(`data: ${JSON.stringify({ progress, currentDate: formattedDate })}\n\n`);
+        if (!Array.isArray(currentDayData.results) || !Array.isArray(previousDayData.results)) {
+          console.error('Unexpected API response format:', { currentDayData, previousDayData });
+          throw new Error('Unexpected API response format');
+        }
 
-      const gapUps = await calculateGapUps(currentDayData.results, previousDayData.results, formattedDate);
-      results.push(...gapUps);
+        processedDays++;
+        const progress = (processedDays / totalDays) * 100;
+        res.write(`data: ${JSON.stringify({ progress, currentDate: formattedDate })}\n\n`);
 
-      // Add a small delay to allow the client to process the event
-      await new Promise(resolve => setTimeout(resolve, 10));
+        const gapUps = await calculateGapUps(currentDayData.results, previousDayData.results, formattedDate);
+        results.push(...gapUps);
+
+        // Add a small delay to allow the client to process the event
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+      } catch (apiError: unknown) {
+        if (apiError instanceof Error) {
+          console.error(`Error fetching data for date ${formattedDate}:`, apiError);
+          res.write(`data: ${JSON.stringify({ error: `Error fetching data for date ${formattedDate}: ${apiError.message}` })}\n\n`);
+        } else {
+          console.error(`Unknown error fetching data for date ${formattedDate}:`, apiError);
+          res.write(`data: ${JSON.stringify({ error: `Unknown error fetching data for date ${formattedDate}` })}\n\n`);
+        }
+      }
 
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
     res.write(`data: ${JSON.stringify({ finished: true, results })}\n\n`);
   } catch (error: unknown) {
-    console.error('Error fetching stock data:', error);
-    let errorMessage = 'Error fetching stock data';
+    console.error('Error in stock scanner:', error);
+    let errorMessage = 'Error in stock scanner';
     if (error instanceof Error) {
       errorMessage += `: ${error.message}`;
     }
