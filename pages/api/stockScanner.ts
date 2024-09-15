@@ -73,6 +73,7 @@ async function calculateGapUps(currentDay: any[], previousDay: any[], currentDat
 
   for (const stock of currentDay) {
     if (stock.T.length > 4) continue;
+    if (stock.o < 1) continue; // Skip stocks with opening price less than $1
 
     const prevDayStock = previousDay.find((s: any) => s.T === stock.T);
     if (prevDayStock) {

@@ -36,6 +36,7 @@ export default function Home() {
     setResults([]);
     setProgress(0);
     setCurrentDate('');
+    setCurrentPage(1); // Reset to page 1
 
     try {
       // Check if results exist in the database
