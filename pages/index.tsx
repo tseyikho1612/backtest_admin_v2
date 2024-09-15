@@ -31,6 +31,8 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [currentDate, setCurrentDate] = useState('');
   const eventSourceRef = useRef<EventSource | null>(null);
+  
+  const [selectedStrategy, setSelectedStrategy] = useState('Gap Up Short');
 
   useEffect(() => {
     const lastTradingDate = getPreviousTradingDate();
@@ -175,20 +177,30 @@ export default function Home() {
   return (
     <div className={styles.container}>
       <Head>
-        <title>Stock Gap Up Scanner</title>
+        <title>Backtest tool</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
       <nav className={styles.navigation}>
-        <Link href="/" className={styles.navButton}>
-          Stock Gap Up Scanner
-        </Link>
+        <div className={styles.navLeft}>
+          <select 
+            value={selectedStrategy} 
+            onChange={(e) => setSelectedStrategy(e.target.value)}
+            className={styles.selectedStrategy}
+          >
+            <option value="Gap Up Short">Gap Up Short</option>
+            {/* Add more options here as needed */}
+          </select>
+          <Link href="/" className={styles.navButton}>
+            Data Cleaning
+          </Link>
+        </div>
         {/* Add more navigation items here if needed */}
       </nav>
 
       <main className={styles.main}>
         <h1 className={styles.title}>
-          Stock <span className={styles.highlight}>G</span>ap <span className={styles.highlight}>U</span>p Scanner
+          {selectedStrategy}
         </h1>
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.inputGroup}>
