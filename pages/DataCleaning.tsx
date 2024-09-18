@@ -37,12 +37,29 @@ export default function DataCleaning() {
   const [selectedStrategy, setSelectedStrategy] = useState('Gap Up Short');
   const router = useRouter();
 
+  const [dataSetNames, setDataSetNames] = useState<string[]>([]);
+  const [selectedDataSet, setSelectedDataSet] = useState('');
+
   useEffect(() => {
     const lastTradingDate = getPreviousTradingDate();
     const formattedDate = lastTradingDate.toISOString().split('T')[0];
     setFromDate(formattedDate);
     setToDate(formattedDate);
   }, []);
+
+  useEffect(() => {
+    fetchDataSetNames();
+  }, []);
+
+  const fetchDataSetNames = async () => {
+    try {
+      const response = await fetch('/api/getDataSetNames');
+      const data = await response.json();
+      setDataSetNames(data);
+    } catch (error) {
+      console.error('Error fetching dataset names:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -189,24 +206,32 @@ export default function DataCleaning() {
   };
 
   const handleInsertToBackTest = async () => {
+    const dataSetName = prompt('Enter a dataset name:', selectedDataSet);
+    if (!dataSetName) return;
+
+    const isExisting = dataSetNames.includes(dataSetName);
+    if (isExisting) {
+      const confirmOverwrite = confirm(`Dataset "${dataSetName}" already exists. Do you want to overwrite it?`);
+      if (!confirmOverwrite) return;
+    }
     try {
       const response = await fetch('/api/insertToBackTest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ results }),
+        body: JSON.stringify({ results, dataSetName, strategyName: selectedStrategy }),
       });
 
       if (response.ok) {
         const data = await response.json();
         alert(data.message);
-        // router.push('/backtest');
+        fetchDataSetNames(); // Refresh the list of dataset names
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to insert data');
       }
     } catch (error) {
       console.error('Error inserting data:', error);
-      alert(`Failed to insert data into backTest_GapUpShort table: ${error.message}`);
+      alert(`Failed to insert data into backTest_GapUpShort table: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
