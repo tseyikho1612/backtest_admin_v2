@@ -10,9 +10,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  const { dataSetName, entryMethod, exitMethod, stopLossMethod } = req.body;
+
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT * FROM backTest_GapUpShort ORDER BY date ASC');
+    const query = `
+      SELECT b.* 
+      FROM backTest_GapUpShort b
+      JOIN dataset d ON b.datasetid = d.id
+      WHERE d.dataSetName = $1
+      ORDER BY b.date ASC
+    `;
+    const result = await client.query(query, [dataSetName]);
     client.release();
 
     res.status(200).json(result.rows);

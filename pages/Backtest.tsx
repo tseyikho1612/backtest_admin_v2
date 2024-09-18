@@ -32,17 +32,38 @@ export default function Backtest() {
   const [stopLossMethod, setStopLossMethod] = useState('30% higher than open');
   const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] });
   const [backtestData, setBacktestData] = useState<BacktestData[]>([]);
+  const [dataSetNames, setDataSetNames] = useState<string[]>([]);
+  const [selectedDataSet, setSelectedDataSet] = useState('');
 
   useEffect(() => {
-    fetchBacktestData();
-  }, [entryMethod, exitMethod, stopLossMethod]);
+    fetchDataSetNames();
+  }, []);
+
+  useEffect(() => {
+    if (selectedDataSet) {
+      fetchBacktestData();
+    }
+  }, [selectedDataSet, entryMethod, exitMethod, stopLossMethod]);
+
+  const fetchDataSetNames = async () => {
+    try {
+      const response = await fetch('/api/getDataSetNames');
+      const data = await response.json();
+      setDataSetNames(data);
+      if (data.length > 0) {
+        setSelectedDataSet(data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching dataset names:', error);
+    }
+  };
 
   const fetchBacktestData = async () => {
     try {
       const response = await fetch('/api/getBacktestData', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entryMethod, exitMethod, stopLossMethod }),
+        body: JSON.stringify({ dataSetName: selectedDataSet, entryMethod, exitMethod, stopLossMethod }),
       });
       const data = await response.json();
       
@@ -107,6 +128,20 @@ export default function Backtest() {
         <h1 className={styles.title}>Backtest: {selectedStrategy}</h1>
         
         <div className={styles.backtestSettings}>
+          <div className={styles.settingGroup}>
+            <label htmlFor="dataSet">Dataset:</label>
+            <select 
+              id="dataSet" 
+              value={selectedDataSet} 
+              onChange={(e) => setSelectedDataSet(e.target.value)}
+              className={styles.comboBox}
+            >
+              {dataSetNames.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+
           <div className={styles.settingGroup}>
             <label htmlFor="entryMethod">Entry method:</label>
             <select 
