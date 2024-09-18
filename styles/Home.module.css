@@ -139,21 +139,44 @@
   margin-bottom: 1rem;
 }
 
+.buttonContainer {
+  display: flex;
+  gap: 1rem;
+  margin-left: auto; /* This will push the buttons to the right */
+}
+
+.insertButton,
 .exportButton {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background-color: #4CAF50;
-  color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 1rem;
   transition: background-color 0.3s;
 }
 
+.insertButton {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.exportButton {
+  background-color: #008CBA;
+  color: white;
+}
+
+.insertButton:hover,
 .exportButton:hover {
-  background-color: #45a049;
+  opacity: 0.9;
+}
+
+.insertButton:disabled,
+.exportButton:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 
 .exportButton svg {

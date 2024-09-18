@@ -9,6 +9,7 @@ import { checkResultsExist, saveResults, getResultsFromDatabase } from '../utils
 import { isTradingDate } from '../utils/dateUtils';
 import { GetStaticProps } from 'next';
 import Navigation from '../components/Navigation';
+import { useRouter } from 'next/router';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -34,6 +35,7 @@ export default function DataCleaning() {
   const eventSourceRef = useRef<EventSource | null>(null);
   
   const [selectedStrategy, setSelectedStrategy] = useState('Gap Up Short');
+  const router = useRouter();
 
   useEffect(() => {
     const lastTradingDate = getPreviousTradingDate();
@@ -186,6 +188,28 @@ export default function DataCleaning() {
     XLSX.writeFile(workbook, fileName);
   };
 
+  const handleInsertToBackTest = async () => {
+    try {
+      const response = await fetch('/api/insertToBackTest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ results }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message);
+        // router.push('/backtest');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to insert data');
+      }
+    } catch (error) {
+      console.error('Error inserting data:', error);
+      alert(`Failed to insert data into backTest_GapUpShort table: ${error.message}`);
+    }
+  };
+
   return (
     <div className={styles.container}>
       <Head>
@@ -247,12 +271,27 @@ export default function DataCleaning() {
         <div className={styles.tableContainer}>
           <div className={styles.tableHeader}>
             <h2>Results</h2>
-            <button onClick={exportToExcel} className={styles.exportButton} disabled={results.length === 0}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                <path d="M2.859 2.877l12.57-1.795a.5.5 0 01.571.495v20.846a.5.5 0 01-.57.495L2.858 21.123a1 1 0 01-.859-.99V3.867a1 1 0 01.859-.99zM4 5.5v1h1v-1H4zm1 3v1h1v-1H5zm-1 3v1h1v-1H4zm1 3v1h1v-1H5zm-1 3v1h1v-1H4zm13.5-12v1h1v-1h-1zm1 3v1h1v-1h-1zm-1 3v1h1v-1h-1zm1 3v1h1v-1h-1zm-1 3v1h1v-1h-1z"/>
-              </svg>
-              Export to Excel
-            </button>
+            <div className={styles.buttonContainer}>
+              <button
+                id="instToBackTestButton"
+                onClick={handleInsertToBackTest}
+                className={styles.insertButton}
+                disabled={results.length === 0}
+              >
+                Insert to BackTesting
+              </button>
+              <button
+                id="exportExcelButton"
+                onClick={exportToExcel}
+                className={styles.exportButton}
+                disabled={results.length === 0}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                  <path d="M2.859 2.877l12.57-1.795a.5.5 0 01.571.495v20.846a.5.5 0 01-.57.495L2.858 21.123a1 1 0 01-.859-.99V3.867a1 1 0 01.859-.99zM4 5.5v1h1v-1H4zm1 3v1h1v-1H5zm-1 3v1h1v-1H4zm1 3v1h1v-1H5zm-1 3v1h1v-1H4zm13.5-12v1h1v-1h-1zm1 3v1h1v-1h-1zm-1 3v1h1v-1h-1zm1 3v1h1v-1h-1zm-1 3v1h1v-1h-1z"/>
+                </svg>
+                Export to Excel
+              </button>
+            </div>
           </div>
           <table className={styles.table}>
             <thead>
