@@ -28,10 +28,12 @@ export function setLastMonth(): { fromDate: string; toDate: string } {
 
 export function setLastWeek(): { fromDate: string; toDate: string } {
   const today = new Date();
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
   const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
   return {
     fromDate: lastWeek.toISOString().split('T')[0],
-    toDate: today.toISOString().split('T')[0]
+    toDate: yesterday.toISOString().split('T')[0]
   };
 }
 

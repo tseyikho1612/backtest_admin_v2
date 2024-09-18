@@ -179,7 +179,11 @@ export default function DataCleaning() {
     const worksheet = XLSX.utils.json_to_sheet(results);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Results");
-    XLSX.writeFile(workbook, `${selectedStrategy}_results.xlsx`);
+    
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+    const fileName = `${selectedStrategy}_results_${timestamp}.xlsx`;
+    
+    XLSX.writeFile(workbook, fileName);
   };
 
   return (
@@ -240,52 +244,52 @@ export default function DataCleaning() {
         )}
         {error && <p className={styles.error}>{error}</p>}
 
-        {results.length > 0 && (
-          <div className={styles.tableContainer}>
-            <div className={styles.tableHeader}>
-              <h2>Results</h2>
-              <button onClick={exportToExcel} className={styles.exportButton}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                  <path d="M2.859 2.877l12.57-1.795a.5.5 0 01.571.495v20.846a.5.5 0 01-.57.495L2.858 21.123a1 1 0 01-.859-.99V3.867a1 1 0 01.859-.99zM4 5.5v1h1v-1H4zm1 3v1h1v-1H5zm-1 3v1h1v-1H4zm1 3v1h1v-1H5zm-1 3v1h1v-1H4zm13.5-12v1h1v-1h-1zm1 3v1h1v-1h-1zm-1 3v1h1v-1h-1zm1 3v1h1v-1h-1zm-1 3v1h1v-1h-1z"/>
-                </svg>
-                Export to Excel
-              </button>
-            </div>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  {Object.keys(columnNames).map((key) => (
-                    <th 
-                      key={key} 
-                      className={styles.th} 
-                      onClick={() => key !== 'rowNumber' ? handleSort(key as keyof GapUpStockResult) : null}
-                    >
-                      {columnNames[key]}
-                      {key !== 'rowNumber' && getSortIndicator(key as keyof GapUpStockResult)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedResults.map((stock, index) => (
-                  <tr key={index}>
-                    <td className={styles.td}>{(currentPage - 1) * ITEMS_PER_PAGE + index + 1}</td>
-                    <td className={styles.td}>{stock.ticker}</td>
-                    <td className={styles.td}>{new Date(stock.date).toISOString().split('T')[0]}</td>
-                    <td className={styles.td}>{stock.gap_up_percentage.toFixed(2)}%</td>
-                    <td className={styles.td}>{stock.open.toFixed(2)}</td>
-                    <td className={styles.td}>{stock.close.toFixed(2)}</td>
-                    <td className={styles.td}>{stock.high.toFixed(2)}</td>
-                    <td className={styles.td}>{stock.low.toFixed(2)}</td>
-                    <td className={styles.td}>{stock.spike_percentage.toFixed(2)}%</td>
-                    <td className={styles.td}>{stock.o2c_percentage.toFixed(2)}%</td>
-                    <td className={styles.td}>{stock.volume.toLocaleString()}</td>
-                    <td className={styles.td}>{stock.float ? stock.float.toLocaleString() : 'N/A'}</td>
-                    <td className={styles.td}>{stock.market_cap ? stock.market_cap.toLocaleString() : 'N/A'}</td>
-                  </tr>
+        <div className={styles.tableContainer}>
+          <div className={styles.tableHeader}>
+            <h2>Results</h2>
+            <button onClick={exportToExcel} className={styles.exportButton} disabled={results.length === 0}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                <path d="M2.859 2.877l12.57-1.795a.5.5 0 01.571.495v20.846a.5.5 0 01-.57.495L2.858 21.123a1 1 0 01-.859-.99V3.867a1 1 0 01.859-.99zM4 5.5v1h1v-1H4zm1 3v1h1v-1H5zm-1 3v1h1v-1H4zm1 3v1h1v-1H5zm-1 3v1h1v-1H4zm13.5-12v1h1v-1h-1zm1 3v1h1v-1h-1zm-1 3v1h1v-1h-1zm1 3v1h1v-1h-1zm-1 3v1h1v-1h-1z"/>
+              </svg>
+              Export to Excel
+            </button>
+          </div>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {Object.keys(columnNames).map((key) => (
+                  <th 
+                    key={key} 
+                    className={styles.th} 
+                    onClick={() => key !== 'rowNumber' ? handleSort(key as keyof GapUpStockResult) : null}
+                  >
+                    {columnNames[key]}
+                    {key !== 'rowNumber' && getSortIndicator(key as keyof GapUpStockResult)}
+                  </th>
                 ))}
-              </tbody>
-            </table>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedResults.map((stock, index) => (
+                <tr key={index}>
+                  <td className={styles.td}>{(currentPage - 1) * ITEMS_PER_PAGE + index + 1}</td>
+                  <td className={styles.td}>{stock.ticker}</td>
+                  <td className={styles.td}>{new Date(stock.date).toISOString().split('T')[0]}</td>
+                  <td className={styles.td}>{stock.gap_up_percentage.toFixed(2)}%</td>
+                  <td className={styles.td}>{stock.open.toFixed(2)}</td>
+                  <td className={styles.td}>{stock.close.toFixed(2)}</td>
+                  <td className={styles.td}>{stock.high.toFixed(2)}</td>
+                  <td className={styles.td}>{stock.low.toFixed(2)}</td>
+                  <td className={styles.td}>{stock.spike_percentage.toFixed(2)}%</td>
+                  <td className={styles.td}>{stock.o2c_percentage.toFixed(2)}%</td>
+                  <td className={styles.td}>{stock.volume.toLocaleString()}</td>
+                  <td className={styles.td}>{stock.float ? stock.float.toLocaleString() : 'N/A'}</td>
+                  <td className={styles.td}>{stock.market_cap ? stock.market_cap.toLocaleString() : 'N/A'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {results.length > 0 && (
             <div className={styles.tableFooter}>
               <div className={styles.totalRecords}>
                 Total Records: {results.length}
@@ -304,8 +308,8 @@ export default function DataCleaning() {
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
     </div>
   );

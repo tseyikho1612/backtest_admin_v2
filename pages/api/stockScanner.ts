@@ -102,7 +102,7 @@ async function calculateGapUps(currentDay: any[], previousDay: any[], currentDat
         var float: number | null = 0;
         var marketCap: number | null = 0;
         try {   
-          const tickerDetails = await polygonClient.reference.tickerDetails(stock.T);
+          const tickerDetails = await polygonClient.reference.tickerDetails(stock.T, { date: currentDate });          
           float = tickerDetails.results?.weighted_shares_outstanding || null;
           marketCap = tickerDetails.results?.market_cap || null;
         } catch (error) {
