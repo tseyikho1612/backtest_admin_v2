@@ -6,7 +6,7 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
 import { format } from 'date-fns';
-import { Trash2 } from 'react-feather'; // Add this import for the delete icon
+import { Trash2 } from 'react-feather';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -35,6 +35,14 @@ export default function Backtest() {
   const [backtestData, setBacktestData] = useState<BacktestData[]>([]);
   const [dataSetNames, setDataSetNames] = useState<string[]>([]);
   const [selectedDataSet, setSelectedDataSet] = useState('');
+  const [stats, setStats] = useState({
+    totalTrades: 0,
+    percentProfitable: 0,
+    profitFactor: 0,
+    maxDrawdown: 0,
+    avgTrade: 0,
+    sharpeRatio: 0,
+  });
 
   useEffect(() => {
     fetchDataSetNames();
@@ -86,6 +94,7 @@ export default function Backtest() {
         });
 
         setBacktestData(sortedData);
+        calculateStats(sortedData);
       }
     } catch (error) {
       console.error('Error fetching backtest data:', error);
@@ -111,6 +120,18 @@ export default function Backtest() {
     } else {
       return -((exitPrice - entryPrice) / entryPrice) * 100;
     }
+  };
+
+  const calculateStats = (data: BacktestData[]) => {
+    // This is a placeholder. You should implement the actual calculations here.
+    setStats({
+      totalTrades: data.length,
+      percentProfitable: 50, // Example value
+      profitFactor: 1.5, // Example value
+      maxDrawdown: 10, // Example value
+      avgTrade: 2, // Example value
+      sharpeRatio: 1.2, // Example value
+    });
   };
 
   const handleDeleteDataset = async (datasetName: string) => {
@@ -226,76 +247,112 @@ export default function Backtest() {
           </div>
         </div>
 
-        <div className={styles.chartContainer}>
-          <Line data={chartData} options={{
-            responsive: true,
-            plugins: {
-              legend: {
-                position: 'top' as const,
-              },
-              title: {
-                display: true,
-                text: 'Accumulative Profit Over Time',
-              },
-            },
-            scales: {
-              x: {
+        <div className={styles.chartAndStatsContainer}>
+          <div className={styles.chartContainer}>
+            <Line data={chartData} options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'top' as const,
+                },
                 title: {
                   display: true,
-                  text: 'Date',
+                  text: 'Accumulative Profit Over Time',
                 },
               },
-              y: {
-                title: {
-                  display: true,
-                  text: 'Accumulative Profit (%)',
+              scales: {
+                x: {
+                  title: {
+                    display: true,
+                    text: 'Date',
+                  },
+                },
+                y: {
+                  title: {
+                    display: true,
+                    text: 'Accumulative Profit (%)',
+                  },
                 },
               },
-            },
-          }} />
+            }} />
+          </div>
+
+          <div className={styles.statsContainer}>
+            <table className={styles.statsTable}>
+              <tbody>
+                <tr>
+                  <td>Total Trades:</td>
+                  <td>{stats.totalTrades}</td>
+                </tr>
+                <tr>
+                  <td>Percent Profitable:</td>
+                  <td>{stats.percentProfitable.toFixed(2)}%</td>
+                </tr>
+                <tr>
+                  <td>Profit Factor:</td>
+                  <td>{stats.profitFactor.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td className={styles.maxDrawdown}>Max Drawdown:</td>
+                  <td className={styles.maxDrawdown}>{stats.maxDrawdown.toFixed(2)}%</td>
+                </tr>
+                <tr>
+                  <td>Avg Trade:</td>
+                  <td>{stats.avgTrade.toFixed(2)}%</td>
+                </tr>
+                <tr>
+                  <td>Sharpe Ratio:</td>
+                  <td>{stats.sharpeRatio.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.thLeftAlign}>Date</th>
-                <th className={styles.thLeftAlign}>Ticker</th>
-                <th className={styles.thLeftAlign}>Open</th>
-                <th className={styles.thLeftAlign}>Close</th>
-                <th className={styles.thLeftAlign}>High</th>
-                <th className={styles.thLeftAlign}>Low</th>
-                <th className={styles.thLeftAlign}>Gap Up %</th>
-                <th className={styles.thLeftAlign}>Spike %</th>
-                <th className={styles.thLeftAlign}>O2C %</th>
-                <th className={styles.thLeftAlign}>Volume</th>
-                <th className={styles.thLeftAlign}>Float</th>
-                <th className={styles.thLeftAlign}>Market Cap</th>
-                <th className={styles.thLeftAlign}>Profit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {backtestData.map((item, index) => (
-                <tr key={index}>
-                  <td>{format(new Date(item.date), 'dd-MM-yy')}</td>
-                  <td>{item.ticker}</td>
-                  <td>{Number(item.open).toFixed(2)}</td>
-                  <td>{Number(item.close).toFixed(2)}</td>
-                  <td>{Number(item.high).toFixed(2)}</td>
-                  <td>{Number(item.low).toFixed(2)}</td>
-                  <td>{Number(item.gap_up_percentage).toFixed(2)}%</td>
-                  <td>{Number(item.spike_percentage).toFixed(2)}%</td>
-                  <td>{Number(item.o2c_percentage).toFixed(2)}%</td>
-                  <td>{Number(item.volume).toLocaleString()}</td>
-                  <td>{item.float ? Number(item.float).toLocaleString() : 'N/A'}</td>
-                  <td>{item.market_cap ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
-                  <td className={calculateProfit(item) >= 0 ? styles.profitPositive : styles.profitNegative}>
-                    {calculateProfit(item).toFixed(2)}%
-                  </td>
+        <div className={styles.backtestResultsContainer}>
+          <div className={styles.tableContainer}>
+            <table id="backtestResultsTable" className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.thLeftAlign}>Date</th>
+                  <th className={styles.thLeftAlign}>Ticker</th>
+                  <th className={styles.thLeftAlign}>Open</th>
+                  <th className={styles.thLeftAlign}>Close</th>
+                  <th className={styles.thLeftAlign}>High</th>
+                  <th className={styles.thLeftAlign}>Low</th>
+                  <th className={styles.thLeftAlign}>Gap Up %</th>
+                  <th className={styles.thLeftAlign}>Spike %</th>
+                  <th className={styles.thLeftAlign}>O2C %</th>
+                  <th className={styles.thLeftAlign}>Volume</th>
+                  <th className={styles.thLeftAlign}>Float</th>
+                  <th className={styles.thLeftAlign}>Market Cap</th>
+                  <th className={styles.thLeftAlign}>Profit</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {backtestData.map((item, index) => (
+                  <tr key={index}>
+                    <td>{format(new Date(item.date), 'dd-MM-yy')}</td>
+                    <td>{item.ticker}</td>
+                    <td>{Number(item.open).toFixed(2)}</td>
+                    <td>{Number(item.close).toFixed(2)}</td>
+                    <td>{Number(item.high).toFixed(2)}</td>
+                    <td>{Number(item.low).toFixed(2)}</td>
+                    <td>{Number(item.gap_up_percentage).toFixed(2)}%</td>
+                    <td>{Number(item.spike_percentage).toFixed(2)}%</td>
+                    <td>{Number(item.o2c_percentage).toFixed(2)}%</td>
+                    <td>{Number(item.volume).toLocaleString()}</td>
+                    <td>{item.float ? Number(item.float).toLocaleString() : 'N/A'}</td>
+                    <td>{item.market_cap ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
+                    <td className={calculateProfit(item) >= 0 ? styles.profitPositive : styles.profitNegative}>
+                      {calculateProfit(item).toFixed(2)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
     </div>

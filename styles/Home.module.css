@@ -62,7 +62,7 @@
 .tableContainer {
   @apply overflow-x-auto border-2 border-gray-300 rounded-lg;
   max-width: 100%;
-  margin-top: 2rem;
+  margin-top: 5rem;
 }
 
 .pagination {
@@ -264,4 +264,59 @@
 
 .deleteDatasetButton:hover {
   color: red;
+}
+
+.chartAndStatsContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  margin-top: 2rem;
+  height: 400px; /* Adjust this value as needed */
+  margin-bottom: 2rem;
+}
+
+.chartContainer {
+  width: 70%;
+  height: 100%;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+}
+
+.statsContainer {
+  width: 28%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.statsTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 0.5rem;
+}
+
+.statsTable td {
+  padding: 0.5rem 0;
+}
+
+.statsTable td:first-child {
+  font-weight: bold;
+  color: #333;
+}
+
+.statsTable td:last-child {
+  text-align: right;
+  font-weight: 600;
+  color: #0066cc;
+}
+
+.maxDrawdown {
+  color: #cc0000 !important;
 }
