@@ -6,6 +6,7 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
 import { format } from 'date-fns';
+import { Trash2 } from 'react-feather'; // Add this import for the delete icon
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -112,6 +113,37 @@ export default function Backtest() {
     }
   };
 
+  const handleDeleteDataset = async (datasetName: string) => {
+    if (confirm(`Are you sure you want to delete the dataset "${datasetName}" and all related records?`)) {
+      try {
+        const response = await fetch('/api/deleteDataset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ datasetName }),
+        });
+        
+        if (response.ok) {
+          // Remove the deleted dataset from the list
+          setDataSetNames(prevNames => prevNames.filter(name => name !== datasetName));
+          
+          // If the deleted dataset was selected, reset the selection
+          if (selectedDataSet === datasetName) {
+            setSelectedDataSet('');
+            setBacktestData([]);
+            setChartData({ labels: [], datasets: [] });
+          }
+        } else {
+          const errorData = await response.json();
+          console.error('Failed to delete dataset:', errorData.message);
+          alert(`Failed to delete dataset: ${errorData.message}`);
+        }
+      } catch (error) {
+        console.error('Error deleting dataset:', error);
+        alert(`Error deleting dataset: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  };
+
   return (
     <div className={styles.container}>
       <Head>
@@ -130,16 +162,27 @@ export default function Backtest() {
         <div className={styles.backtestSettings}>
           <div className={styles.settingGroup}>
             <label htmlFor="dataSet">Dataset:</label>
-            <select 
-              id="dataSet" 
-              value={selectedDataSet} 
-              onChange={(e) => setSelectedDataSet(e.target.value)}
-              className={styles.comboBox}
-            >
-              {dataSetNames.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
+            <div className={styles.datasetSelectContainer}>
+              <select 
+                id="dataSet" 
+                value={selectedDataSet} 
+                onChange={(e) => setSelectedDataSet(e.target.value)}
+                className={styles.comboBox}
+              >
+                {dataSetNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              {selectedDataSet && (
+                <button
+                  className={styles.deleteDatasetButton}
+                  onClick={() => handleDeleteDataset(selectedDataSet)}
+                  title="Delete selected dataset"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className={styles.settingGroup}>
