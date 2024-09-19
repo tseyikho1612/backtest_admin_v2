@@ -137,9 +137,21 @@ export default function Backtest() {
     let maxDrawdown = 0;
     let peak = 0;
     let accumulativeProfit = 0;
+    let totalProfit = 0;
+    let totalLoss = 0;
+    const dailyReturns: number[] = [];
+    let previousAccumulativeProfit = 0;
+
     data.forEach(item => {
       const profit = calculateProfit(item);
       accumulativeProfit += profit;
+      
+      if (profit > 0) {
+        totalProfit += profit;
+      } else {
+        totalLoss -= profit; // Note: profit is negative here
+      }
+
       if (accumulativeProfit > peak) {
         peak = accumulativeProfit;
       }
@@ -147,17 +159,32 @@ export default function Backtest() {
       if (drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
       }
+
+      // Calculate daily return
+      const dailyReturn = accumulativeProfit - previousAccumulativeProfit;
+      dailyReturns.push(dailyReturn);
+      previousAccumulativeProfit = accumulativeProfit;
     });
 
-    const avgTrade = data.reduce((sum, item) => sum + calculateProfit(item), 0) / totalTrades;
+    const avgTrade = accumulativeProfit / totalTrades;
+
+    // Calculate Profit Factor
+    const profitFactor = totalLoss !== 0 ? totalProfit / totalLoss : totalProfit > 0 ? Infinity : 0;
+
+    // Calculate Sharpe Ratio
+    const avgDailyReturn = dailyReturns.reduce((sum, return_) => sum + return_, 0) / dailyReturns.length;
+    const stdDevDailyReturn = Math.sqrt(
+      dailyReturns.reduce((sum, return_) => sum + Math.pow(return_ - avgDailyReturn, 2), 0) / dailyReturns.length
+    );
+    const sharpeRatio = stdDevDailyReturn !== 0 ? (avgDailyReturn / stdDevDailyReturn) * Math.sqrt(252) : 0; // Annualized
 
     setStats({
       totalTrades,
       percentProfitable,
-      profitFactor: 0, // Placeholder for now
+      profitFactor,
       maxDrawdown,
       avgTrade,
-      sharpeRatio: 0, // Placeholder for now
+      sharpeRatio,
     });
   };
 
@@ -318,7 +345,7 @@ export default function Backtest() {
                 </tr>
                 <tr>
                   <td>Profit Factor:</td>
-                  <td>N/A</td>
+                  <td>{stats.profitFactor.toFixed(2)}</td>
                 </tr>
                 <tr>
                   <td className={styles.maxDrawdown}>Max Drawdown:</td>
@@ -330,7 +357,7 @@ export default function Backtest() {
                 </tr>
                 <tr>
                   <td>Sharpe Ratio:</td>
-                  <td>N/A</td>
+                  <td>{stats.sharpeRatio.toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
