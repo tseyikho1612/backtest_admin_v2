@@ -54,6 +54,12 @@ export default function Backtest() {
     }
   }, [selectedDataSet, entryMethod, exitMethod, stopLossMethod]);
 
+  useEffect(() => {
+    if (backtestData.length > 0) {
+      calculateStats(backtestData);
+    }
+  }, [backtestData]);
+
   const fetchDataSetNames = async () => {
     try {
       const response = await fetch('/api/getDataSetNames');
@@ -123,14 +129,35 @@ export default function Backtest() {
   };
 
   const calculateStats = (data: BacktestData[]) => {
-    // This is a placeholder. You should implement the actual calculations here.
+    const totalTrades = data.length;
+    
+    const profitableTrades = data.filter(item => calculateProfit(item) > 0).length;
+    const percentProfitable = (profitableTrades / totalTrades) * 100;
+
+    let maxDrawdown = 0;
+    let peak = 0;
+    let accumulativeProfit = 0;
+    data.forEach(item => {
+      const profit = calculateProfit(item);
+      accumulativeProfit += profit;
+      if (accumulativeProfit > peak) {
+        peak = accumulativeProfit;
+      }
+      const drawdown = peak - accumulativeProfit;
+      if (drawdown > maxDrawdown) {
+        maxDrawdown = drawdown;
+      }
+    });
+
+    const avgTrade = data.reduce((sum, item) => sum + calculateProfit(item), 0) / totalTrades;
+
     setStats({
-      totalTrades: data.length,
-      percentProfitable: 50, // Example value
-      profitFactor: 1.5, // Example value
-      maxDrawdown: 10, // Example value
-      avgTrade: 2, // Example value
-      sharpeRatio: 1.2, // Example value
+      totalTrades,
+      percentProfitable,
+      profitFactor: 0, // Placeholder for now
+      maxDrawdown,
+      avgTrade,
+      sharpeRatio: 0, // Placeholder for now
     });
   };
 
@@ -160,7 +187,7 @@ export default function Backtest() {
         }
       } catch (error) {
         console.error('Error deleting dataset:', error);
-        alert(`Error deleting dataset: ${error instanceof Error ? error.message : String(error)}`);
+        alert(`Error deleting dataset: ${error instanceof Error ? error.message : String(error)}`);        
       }
     }
   };
@@ -291,7 +318,7 @@ export default function Backtest() {
                 </tr>
                 <tr>
                   <td>Profit Factor:</td>
-                  <td>{stats.profitFactor.toFixed(2)}</td>
+                  <td>N/A</td>
                 </tr>
                 <tr>
                   <td className={styles.maxDrawdown}>Max Drawdown:</td>
@@ -303,7 +330,7 @@ export default function Backtest() {
                 </tr>
                 <tr>
                   <td>Sharpe Ratio:</td>
-                  <td>{stats.sharpeRatio.toFixed(2)}</td>
+                  <td>N/A</td>
                 </tr>
               </tbody>
             </table>
