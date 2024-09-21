@@ -68,53 +68,61 @@ export default function DataCleaning() {
     setResults([]);
     setProgress(0);
     setCurrentDate('');
-    setCurrentPage(1); // Reset to page 1
+    setCurrentPage(1);
 
     try {
-      // Check if results exist in the database
       const response = await fetch(`/api/checkResults?fromDate=${fromDate}&toDate=${toDate}`);
       const dateExistence: { [date: string]: boolean } = await response.json();
 
       let allResults: GapUpStockResult[] = [];
 
       for (const [date, exists] of Object.entries(dateExistence)) {
-        if (exists) {
-          // Fetch results from the database for this date
-          const dbResponse = await fetch(`/api/getResults?fromDate=${date}&toDate=${date}`);
-          const { results: dbResults } = await dbResponse.json();
-          allResults = [...allResults, ...dbResults];
-        } else if (isTradingDate(new Date(date))) {
-          // Fetch results from API for this date
-          if (eventSourceRef.current) {
-            eventSourceRef.current.close();
+        try {
+          if (exists) {
+            const dbResponse = await fetch(`/api/getResults?fromDate=${date}&toDate=${date}`);
+            const { results: dbResults } = await dbResponse.json();
+            allResults = [...allResults, ...dbResults];
+          } else if (isTradingDate(new Date(date))) {
+            if (eventSourceRef.current) {
+              eventSourceRef.current.close();
+            }
+
+            const eventSource = new EventSource(`/api/stockScanner?fromDate=${date}&toDate=${date}`);
+            eventSourceRef.current = eventSource;
+
+            await new Promise<void>((resolve) => {
+              eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.progress !== undefined) {
+                  setProgress(data.progress);
+                  setCurrentDate(data.currentDate || '');
+                } else if (data.finished) {
+                  if (Array.isArray(data.results)) {
+                    allResults = [...allResults, ...data.results];
+                  } else {
+                    console.error(`Invalid results format for date ${date}:`, data.results);
+                  }
+                  eventSource.close();
+                  resolve();
+                } else if (data.error) {
+                  console.error(`Error processing date ${date}:`, data.error);
+                  // Don't reject, just log the error and continue
+                  eventSource.close();
+                  resolve();
+                }
+              };
+
+              eventSource.onerror = (err) => {
+                console.error(`EventSource error for date ${date}:`, err);
+                // Don't reject, just log the error and continue
+                eventSource.close();
+                resolve();
+              };
+            });
           }
-
-          const eventSource = new EventSource(`/api/stockScanner?fromDate=${date}&toDate=${date}`);
-          eventSourceRef.current = eventSource;
-
-          await new Promise((resolve, reject) => {
-            eventSource.onmessage = async (event) => {
-              const data = JSON.parse(event.data);
-              if (data.progress !== undefined) {
-                setProgress(data.progress);
-                setCurrentDate(data.currentDate || '');
-              } else if (data.finished) {
-                allResults = [...allResults, ...data.results];
-                eventSource.close();
-                resolve(null);
-              } else if (data.error) {
-                console.error('Error from server:', data.error);
-                setError(`Error: ${data.error}`);
-                eventSource.close();
-                reject(new Error(data.error));
-              }
-            };
-
-            eventSource.onerror = (err) => {
-              console.error('EventSource error:', err);
-              reject(new Error('An error occurred while fetching data. Please try again.'));
-            };
-          });
+        } catch (error) {
+          console.error(`Error processing date ${date}:`, error);
+          // Continue to the next date even if there's an error
         }
       }
 
@@ -124,15 +132,20 @@ export default function DataCleaning() {
         const sortedResults = sortResults(allResults, sortConfig);
         setResults(sortedResults);
         // Save results to the database
-        await fetch('/api/saveResults', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fromDate, toDate, results: sortedResults }),
-        });
+        try {
+          await fetch('/api/saveResults', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fromDate, toDate, results: sortedResults }),
+          });
+        } catch (saveError) {
+          console.error('Error saving results to database:', saveError);
+          // Continue even if saving to database fails
+        }
       }
     } catch (error) {
-      setError('An error occurred while processing your request');
-      console.error(error);
+      console.error('An error occurred while processing your request:', error);
+      setError('An error occurred while processing your request. Some data may be incomplete.');
     } finally {
       setLoading(false);
     }
