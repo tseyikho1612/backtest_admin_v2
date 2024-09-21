@@ -343,7 +343,7 @@ export default function Backtest() {
               id="commissions"
               value={commissions}
               onChange={handleCommissionsChange}
-              className={styles.input}
+              className={styles.commissionInput}
               style={{ width: '50px' }}
             />
             <span>%</span>
