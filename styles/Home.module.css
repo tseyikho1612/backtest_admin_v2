@@ -24,6 +24,9 @@
 
 .input {
   @apply border p-2;
+  width: 50px;
+  margin-left: 10px;
+  margin-right: 5px;
 }
 
 .button {
@@ -319,4 +322,8 @@
 
 .maxDrawdown {
   color: #cc0000 !important;
+}
+
+.checkbox {
+  margin-right: 10px;  
 }

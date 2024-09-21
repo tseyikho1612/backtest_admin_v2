@@ -43,6 +43,8 @@ export default function Backtest() {
     avgTrade: 0,
     sharpeRatio: 0,
   });
+  const [commissions, setCommissions] = useState('3');
+  const [applyCommissions, setApplyCommissions] = useState(false);
 
   useEffect(() => {
     fetchDataSetNames();
@@ -56,9 +58,15 @@ export default function Backtest() {
 
   useEffect(() => {
     if (backtestData.length > 0) {
-      calculateStats(backtestData);
+      const updatedData = backtestData.map(item => ({
+        ...item,
+        profit: calculateProfit(item)
+      }));
+      setBacktestData(updatedData);
+      updateChartData(updatedData);
+      calculateStats(updatedData);
     }
-  }, [backtestData]);
+  }, [applyCommissions, commissions, entryMethod, exitMethod, stopLossMethod]);
 
   const fetchDataSetNames = async () => {
     try {
@@ -84,36 +92,17 @@ export default function Backtest() {
       
       if (data && data.length > 0) {
         const sortedData = data.sort((a: BacktestData, b: BacktestData) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        const labels = sortedData.map((item: BacktestData) => format(new Date(item.date), 'dd-MM-yy'));
-        const profits = calculateAccumulativeProfits(sortedData);
-        
-        setChartData({
-          labels,
-          datasets: [
-            {
-              label: 'Accumulative Profit',
-              data: profits,
-              borderColor: 'rgb(75, 192, 192)',
-              tension: 0.1,
-            },
-          ],
-        });
-
-        setBacktestData(sortedData);
-        calculateStats(sortedData);
+        const updatedData = sortedData.map(item => ({
+          ...item,
+          profit: calculateProfit(item)
+        }));
+        setBacktestData(updatedData);
+        updateChartData(updatedData);
+        calculateStats(updatedData);
       }
     } catch (error) {
       console.error('Error fetching backtest data:', error);
     }
-  };
-
-  const calculateAccumulativeProfits = (data: BacktestData[]) => {
-    let accumulativeProfit = 0;
-    return data.map(item => {
-      const profit = calculateProfit(item);
-      accumulativeProfit += profit;
-      return accumulativeProfit;
-    });
   };
 
   const calculateProfit = (item: BacktestData) => {
@@ -121,17 +110,49 @@ export default function Backtest() {
     const exitPrice = exitMethod === 'at close' ? Number(item.close) : Number(item.high);
     const stopLossPrice = entryPrice * 1.3; // 30% higher than open
 
+    let profit;
     if (Number(item.high) >= stopLossPrice) {
-      return -((stopLossPrice - entryPrice) / entryPrice) * 100;
+      profit = -((stopLossPrice - entryPrice) / entryPrice) * 100;
     } else {
-      return -((exitPrice - entryPrice) / entryPrice) * 100;
+      profit = -((exitPrice - entryPrice) / entryPrice) * 100;
     }
+
+    if (applyCommissions) {
+      profit -= Number(commissions);
+    }
+
+    return profit;
+  };
+
+  const updateChartData = (data: BacktestData[]) => {
+    const labels = data.map((item) => format(new Date(item.date), 'dd-MM-yy'));
+    const profits = calculateAccumulativeProfits(data);
+    
+    setChartData({
+      labels,
+      datasets: [
+        {
+          label: 'Accumulative Profit',
+          data: profits,
+          borderColor: 'rgb(75, 192, 192)',
+          tension: 0.1,
+        },
+      ],
+    });
+  };
+
+  const calculateAccumulativeProfits = (data: BacktestData[]) => {
+    let accumulativeProfit = 0;
+    return data.map(item => {
+      accumulativeProfit += item.profit;
+      return accumulativeProfit;
+    });
   };
 
   const calculateStats = (data: BacktestData[]) => {
     const totalTrades = data.length;
     
-    const profitableTrades = data.filter(item => calculateProfit(item) > 0).length;
+    const profitableTrades = data.filter(item => item.profit > 0).length;
     const percentProfitable = (profitableTrades / totalTrades) * 100;
 
     let maxDrawdown = 0;
@@ -143,7 +164,7 @@ export default function Backtest() {
     let previousAccumulativeProfit = 0;
 
     data.forEach(item => {
-      const profit = calculateProfit(item);
+      const profit = item.profit;
       accumulativeProfit += profit;
       
       if (profit > 0) {
@@ -217,6 +238,14 @@ export default function Backtest() {
         alert(`Error deleting dataset: ${error instanceof Error ? error.message : String(error)}`);        
       }
     }
+  };
+
+  const handleApplyCommissionsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setApplyCommissions(e.target.checked);
+  };
+
+  const handleCommissionsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCommissions(e.target.value);
   };
 
   return (
@@ -298,6 +327,26 @@ export default function Backtest() {
               <option value="30% higher than open">30% higher than open</option>
               {/* Add more options as needed */}
             </select>
+          </div>
+
+          <div className={styles.settingGroup}>
+            <input
+              type="checkbox"
+              id="applyCommissions"
+              checked={applyCommissions}
+              onChange={handleApplyCommissionsChange}
+              className={styles.checkbox}
+            />
+            <label htmlFor="commissions">Commissions:</label>
+            <input
+              type="text"
+              id="commissions"
+              value={commissions}
+              onChange={handleCommissionsChange}
+              className={styles.input}
+              style={{ width: '50px' }}
+            />
+            <span>%</span>
           </div>
         </div>
 
@@ -399,8 +448,8 @@ export default function Backtest() {
                     <td>{Number(item.volume).toLocaleString()}</td>
                     <td>{item.float ? Number(item.float).toLocaleString() : 'N/A'}</td>
                     <td>{item.market_cap ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
-                    <td className={calculateProfit(item) >= 0 ? styles.profitPositive : styles.profitNegative}>
-                      {calculateProfit(item).toFixed(2)}%
+                    <td className={item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
+                      {item.profit !== undefined ? item.profit.toFixed(2) : 'N/A'}%
                     </td>
                   </tr>
                 ))}
