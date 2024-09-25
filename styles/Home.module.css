@@ -24,6 +24,12 @@
 
 .input {
   @apply border p-2;
+  margin-left: 10px;
+  margin-right: 5px;
+}
+
+.commissionInput {
+  @apply border p-2;
   width: 50px;
   margin-left: 10px;
   margin-right: 5px;

@@ -4,7 +4,7 @@ import { isHoliday } from '../../../utils/dateUtils';
 
 // http://localhost:3000/api/debugHolidays 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const year = 2024;
+  const year = 2023;
   const holidays = getUSHolidays(year);
 
   const formattedHolidays = holidays.map(date => {

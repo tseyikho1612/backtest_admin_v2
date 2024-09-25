@@ -24,6 +24,13 @@ interface BacktestData {
   float: number | string | null;
   market_cap: number | string | null;
   profit: number;
+  entryPrice?: number;
+  exitPrice?: number;
+}
+
+interface SortConfig {
+  key: keyof BacktestData;
+  direction: 'ascending' | 'descending';
 }
 
 export default function Backtest() {
@@ -45,6 +52,7 @@ export default function Backtest() {
   });
   const [commissions, setCommissions] = useState('3');
   const [applyCommissions, setApplyCommissions] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'ascending' });
 
   useEffect(() => {
     fetchDataSetNames();
@@ -58,10 +66,14 @@ export default function Backtest() {
 
   useEffect(() => {
     if (backtestData.length > 0) {
-      const updatedData = backtestData.map(item => ({
-        ...item,
-        profit: calculateProfit(item)
-      }));
+      const updatedData = backtestData.map(item => {
+        const entryPrice = item.entryPrice || Number(item.open);
+        const exitPrice = item.exitPrice || Number(item.close);
+        return {
+          ...item,
+          profit: calculateProfit(item, entryPrice, exitPrice)
+        };
+      });
       setBacktestData(updatedData);
       updateChartData(updatedData);
       calculateStats(updatedData);
@@ -91,24 +103,46 @@ export default function Backtest() {
       const data = await response.json();
       
       if (data && data.length > 0) {
-        const sortedData = data.sort((a: BacktestData, b: BacktestData) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        const updatedData = sortedData.map(item => ({
-          ...item,
-          profit: calculateProfit(item)
+        const updatedData = await Promise.all(data.map(async (item: BacktestData) => {
+          let entryPrice = Number(item.open);
+          let exitPrice = Number(item.close);
+
+          if (entryMethod === 'at 1st Death Candle') {
+            const formattedDate = format(new Date(item.date), 'yyyy-MM-dd');
+            const deathCandleResponse = await fetch(`/api/checkDeathCandleExist?ticker=${item.ticker}&date=${formattedDate}`);
+            const deathCandleData = await deathCandleResponse.json();
+            if (deathCandleData.deathCandlesExist) {
+              const firstDeathCandle = deathCandleData.deathCandles[0];
+              entryPrice = firstDeathCandle.close;
+            }
+          }
+
+          if (exitMethod === 'at high') {
+            exitPrice = Number(item.high);
+          }
+
+          return {
+            ...item,
+            entryPrice,
+            exitPrice,
+            profit: calculateProfit(item, entryPrice, exitPrice)
+          };
         }));
-        setBacktestData(updatedData);
-        updateChartData(updatedData);
-        calculateStats(updatedData);
+
+        const sortedData = sortResults(updatedData, sortConfig);
+        setBacktestData(sortedData);
+        updateChartData(sortedData);
+        calculateStats(sortedData);
       }
     } catch (error) {
       console.error('Error fetching backtest data:', error);
     }
   };
 
-  const calculateProfit = (item: BacktestData) => {
-    const entryPrice = Number(item.open);
-    const exitPrice = exitMethod === 'at close' ? Number(item.close) : Number(item.high);
-    const stopLossPrice = entryPrice * 1.3; // 30% higher than open
+  const calculateProfit = (item: BacktestData, entryPrice: number, exitPrice: number) => {
+    const stopLossPrice = stopLossMethod === '30% higher than open' 
+      ? Number(item.open) * 1.3 
+      : entryPrice * 1.3;
 
     let profit;
     if (Number(item.high) >= stopLossPrice) {
@@ -248,6 +282,53 @@ export default function Backtest() {
     setCommissions(e.target.value);
   };
 
+  const handleSort = (key: keyof BacktestData) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+    
+    const sortedData = sortResults(backtestData, { key, direction });
+    setBacktestData(sortedData);
+  };
+
+  const sortResults = (data: BacktestData[], sortConfig: SortConfig) => {
+    return [...data].sort((a, b) => {
+      let aValue: number = 0;
+      let bValue: number = 0;
+
+      // Convert values to numbers, treating non-numeric values as 0
+      const numericKeys: (keyof BacktestData)[] = [
+        'open', 'close', 'high', 'low', 'gap_up_percentage', 'spike_percentage',
+        'o2c_percentage', 'volume', 'float', 'market_cap', 'profit'
+      ];
+
+      if (numericKeys.includes(sortConfig.key)) {
+        aValue = Number(a[sortConfig.key]) || 0;
+        bValue = Number(b[sortConfig.key]) || 0;
+      } else if (sortConfig.key === 'date') {
+        return sortConfig.direction === 'ascending' 
+          ? new Date(a.date).getTime() - new Date(b.date).getTime()
+          : new Date(b.date).getTime() - new Date(a.date).getTime();
+      } else {
+        aValue = a[sortConfig.key] as number;
+        bValue = b[sortConfig.key] as number;
+      }
+
+      if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const getSortIndicator = (key: keyof BacktestData) => {
+    if (sortConfig.key === key) {
+      return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+    }
+    return '';
+  };
+
   return (
     <div className={styles.container}>
       <Head>
@@ -298,7 +379,7 @@ export default function Backtest() {
               className={styles.comboBox}
             >
               <option value="at open">at open</option>
-              {/* Add more options as needed */}
+              <option value="at 1st Death Candle">at 1st Death Candle</option>
             </select>
           </div>
 
@@ -312,7 +393,6 @@ export default function Backtest() {
             >
               <option value="at close">at close</option>
               <option value="at high">at high</option>
-              {/* Add more options as needed */}
             </select>
           </div>
 
@@ -325,7 +405,7 @@ export default function Backtest() {
               className={styles.comboBox}
             >
               <option value="30% higher than open">30% higher than open</option>
-              {/* Add more options as needed */}
+              <option value="30% higher than entry price">30% higher than entry price</option>
             </select>
           </div>
 
@@ -343,7 +423,7 @@ export default function Backtest() {
               id="commissions"
               value={commissions}
               onChange={handleCommissionsChange}
-              className={styles.input}
+              className={styles.commissionInput}
               style={{ width: '50px' }}
             />
             <span>%</span>
@@ -418,19 +498,51 @@ export default function Backtest() {
             <table id="backtestResultsTable" className={styles.table}>
               <thead>
                 <tr>
-                  <th className={styles.thLeftAlign}>Date</th>
-                  <th className={styles.thLeftAlign}>Ticker</th>
-                  <th className={styles.thLeftAlign}>Open</th>
-                  <th className={styles.thLeftAlign}>Close</th>
-                  <th className={styles.thLeftAlign}>High</th>
-                  <th className={styles.thLeftAlign}>Low</th>
-                  <th className={styles.thLeftAlign}>Gap Up %</th>
-                  <th className={styles.thLeftAlign}>Spike %</th>
-                  <th className={styles.thLeftAlign}>O2C %</th>
-                  <th className={styles.thLeftAlign}>Volume</th>
-                  <th className={styles.thLeftAlign}>Float</th>
-                  <th className={styles.thLeftAlign}>Market Cap</th>
-                  <th className={styles.thLeftAlign}>Profit</th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('date')}>
+                    Date{getSortIndicator('date')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('ticker')}>
+                    Ticker{getSortIndicator('ticker')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('open')}>
+                    Open{getSortIndicator('open')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('close')}>
+                    Close{getSortIndicator('close')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('high')}>
+                    High{getSortIndicator('high')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('low')}>
+                    Low{getSortIndicator('low')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('gap_up_percentage')}>
+                    Gap Up %{getSortIndicator('gap_up_percentage')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('spike_percentage')}>
+                    Spike %{getSortIndicator('spike_percentage')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('o2c_percentage')}>
+                    O2C %{getSortIndicator('o2c_percentage')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('volume')}>
+                    Volume{getSortIndicator('volume')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('float')}>
+                    Float{getSortIndicator('float')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('market_cap')}>
+                    Market Cap{getSortIndicator('market_cap')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('entryPrice')}>
+                    Entry Price{getSortIndicator('entryPrice')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('exitPrice')}>
+                    Exit Price{getSortIndicator('exitPrice')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('profit')}>
+                    Profit{getSortIndicator('profit')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -448,6 +560,8 @@ export default function Backtest() {
                     <td>{Number(item.volume).toLocaleString()}</td>
                     <td>{item.float ? Number(item.float).toLocaleString() : 'N/A'}</td>
                     <td>{item.market_cap ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
+                    <td>{item.entryPrice?.toFixed(2)}</td>
+                    <td>{item.exitPrice?.toFixed(2)}</td>
                     <td className={item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
                       {item.profit !== undefined ? item.profit.toFixed(2) : 'N/A'}%
                     </td>
