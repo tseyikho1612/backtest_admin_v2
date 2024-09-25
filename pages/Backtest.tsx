@@ -26,6 +26,11 @@ interface BacktestData {
   profit: number;
 }
 
+interface SortConfig {
+  key: keyof BacktestData;
+  direction: 'ascending' | 'descending';
+}
+
 export default function Backtest() {
   const [selectedStrategy, setSelectedStrategy] = useState('Gap Up Short');
   const [entryMethod, setEntryMethod] = useState('at open');
@@ -45,6 +50,7 @@ export default function Backtest() {
   });
   const [commissions, setCommissions] = useState('3');
   const [applyCommissions, setApplyCommissions] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'ascending' });
 
   useEffect(() => {
     fetchDataSetNames();
@@ -248,6 +254,38 @@ export default function Backtest() {
     setCommissions(e.target.value);
   };
 
+  const handleSort = (key: keyof BacktestData) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+    
+    const sortedData = [...backtestData].sort((a, b) => {
+      let aValue = a[key];
+      let bValue = b[key];
+
+      // Convert percentage strings to numbers for proper comparison
+      if (key === 'gap_up_percentage' || key === 'o2c_percentage' || key === 'spike_percentage') {
+        aValue = parseFloat(aValue as string);
+        bValue = parseFloat(bValue as string);
+      }
+
+      if (aValue < bValue) return direction === 'ascending' ? -1 : 1;
+      if (aValue > bValue) return direction === 'ascending' ? 1 : -1;
+      return 0;
+    });
+    
+    setBacktestData(sortedData);
+  };
+
+  const getSortIndicator = (key: keyof BacktestData) => {
+    if (sortConfig.key === key) {
+      return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+    }
+    return '';
+  };
+
   return (
     <div className={styles.container}>
       <Head>
@@ -418,19 +456,45 @@ export default function Backtest() {
             <table id="backtestResultsTable" className={styles.table}>
               <thead>
                 <tr>
-                  <th className={styles.thLeftAlign}>Date</th>
-                  <th className={styles.thLeftAlign}>Ticker</th>
-                  <th className={styles.thLeftAlign}>Open</th>
-                  <th className={styles.thLeftAlign}>Close</th>
-                  <th className={styles.thLeftAlign}>High</th>
-                  <th className={styles.thLeftAlign}>Low</th>
-                  <th className={styles.thLeftAlign}>Gap Up %</th>
-                  <th className={styles.thLeftAlign}>Spike %</th>
-                  <th className={styles.thLeftAlign}>O2C %</th>
-                  <th className={styles.thLeftAlign}>Volume</th>
-                  <th className={styles.thLeftAlign}>Float</th>
-                  <th className={styles.thLeftAlign}>Market Cap</th>
-                  <th className={styles.thLeftAlign}>Profit</th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('date')}>
+                    Date{getSortIndicator('date')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('ticker')}>
+                    Ticker{getSortIndicator('ticker')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('open')}>
+                    Open{getSortIndicator('open')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('close')}>
+                    Close{getSortIndicator('close')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('high')}>
+                    High{getSortIndicator('high')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('low')}>
+                    Low{getSortIndicator('low')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('gap_up_percentage')}>
+                    Gap Up %{getSortIndicator('gap_up_percentage')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('spike_percentage')}>
+                    Spike %{getSortIndicator('spike_percentage')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('o2c_percentage')}>
+                    O2C %{getSortIndicator('o2c_percentage')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('volume')}>
+                    Volume{getSortIndicator('volume')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('float')}>
+                    Float{getSortIndicator('float')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('market_cap')}>
+                    Market Cap{getSortIndicator('market_cap')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('profit')}>
+                    Profit{getSortIndicator('profit')}
+                  </th>
                 </tr>
               </thead>
               <tbody>

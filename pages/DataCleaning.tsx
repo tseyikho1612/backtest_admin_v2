@@ -39,6 +39,7 @@ export default function DataCleaning() {
 
   const [dataSetNames, setDataSetNames] = useState<string[]>([]);
   const [selectedDataSet, setSelectedDataSet] = useState('');
+  const [directSelect, setDirectSelect] = useState(false);
 
   useEffect(() => {
     const lastTradingDate = getPreviousTradingDate();
@@ -71,76 +72,89 @@ export default function DataCleaning() {
     setCurrentPage(1);
 
     try {
-      const response = await fetch(`/api/checkResults?fromDate=${fromDate}&toDate=${toDate}`);
-      const dateExistence: { [date: string]: boolean } = await response.json();
+      if (directSelect) {
+        // Directly select from the database
+        const response = await fetch(`/api/getResults?fromDate=${fromDate}&toDate=${toDate}`);
+        const { results: dbResults } = await response.json();
+        if (dbResults.length === 0) {
+          setError("No data meet the criteria");
+        } else {
+          const sortedResults = sortResults(dbResults, sortConfig);
+          setResults(sortedResults);
+        }
+      } else {
+        // Existing logic for fetching and processing data
+        const response = await fetch(`/api/checkResults?fromDate=${fromDate}&toDate=${toDate}`);
+        const dateExistence: { [date: string]: boolean } = await response.json();
 
-      let allResults: GapUpStockResult[] = [];
+        let allResults: GapUpStockResult[] = [];
 
-      for (const [date, exists] of Object.entries(dateExistence)) {
-        try {
-          if (exists) {
-            const dbResponse = await fetch(`/api/getResults?fromDate=${date}&toDate=${date}`);
-            const { results: dbResults } = await dbResponse.json();
-            allResults = [...allResults, ...dbResults];
-          } else if (isTradingDate(new Date(date))) {
-            if (eventSourceRef.current) {
-              eventSourceRef.current.close();
-            }
+        for (const [date, exists] of Object.entries(dateExistence)) {
+          try {
+            if (exists) {
+              const dbResponse = await fetch(`/api/getResults?fromDate=${date}&toDate=${date}`);
+              const { results: dbResults } = await dbResponse.json();
+              allResults = [...allResults, ...dbResults];
+            } else if (isTradingDate(new Date(date))) {
+              if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+              }
 
-            const eventSource = new EventSource(`/api/stockScanner?fromDate=${date}&toDate=${date}`);
-            eventSourceRef.current = eventSource;
+              const eventSource = new EventSource(`/api/stockScanner?fromDate=${date}&toDate=${date}`);
+              eventSourceRef.current = eventSource;
 
-            await new Promise<void>((resolve) => {
-              eventSource.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.progress !== undefined) {
-                  setProgress(data.progress);
-                  setCurrentDate(data.currentDate || '');
-                } else if (data.finished) {
-                  if (Array.isArray(data.results)) {
-                    allResults = [...allResults, ...data.results];
-                  } else {
-                    console.error(`Invalid results format for date ${date}:`, data.results);
+              await new Promise<void>((resolve) => {
+                eventSource.onmessage = (event) => {
+                  const data = JSON.parse(event.data);
+                  if (data.progress !== undefined) {
+                    setProgress(data.progress);
+                    setCurrentDate(data.currentDate || '');
+                  } else if (data.finished) {
+                    if (Array.isArray(data.results)) {
+                      allResults = [...allResults, ...data.results];
+                    } else {
+                      console.error(`Invalid results format for date ${date}:`, data.results);
+                    }
+                    eventSource.close();
+                    resolve();
+                  } else if (data.error) {
+                    console.error(`Error processing date ${date}:`, data.error);
+                    // Don't reject, just log the error and continue
+                    eventSource.close();
+                    resolve();
                   }
-                  eventSource.close();
-                  resolve();
-                } else if (data.error) {
-                  console.error(`Error processing date ${date}:`, data.error);
+                };
+
+                eventSource.onerror = (err) => {
+                  console.error(`EventSource error for date ${date}:`, err);
                   // Don't reject, just log the error and continue
                   eventSource.close();
                   resolve();
-                }
-              };
-
-              eventSource.onerror = (err) => {
-                console.error(`EventSource error for date ${date}:`, err);
-                // Don't reject, just log the error and continue
-                eventSource.close();
-                resolve();
-              };
-            });
+                };
+              });
+            }
+          } catch (error) {
+            console.error(`Error processing date ${date}:`, error);
+            // Continue to the next date even if there's an error
           }
-        } catch (error) {
-          console.error(`Error processing date ${date}:`, error);
-          // Continue to the next date even if there's an error
         }
-      }
 
-      if (allResults.length === 0) {
-        setError("No data meet the criteria");
-      } else {
-        const sortedResults = sortResults(allResults, sortConfig);
-        setResults(sortedResults);
-        // Save results to the database
-        try {
-          await fetch('/api/saveResults', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fromDate, toDate, results: sortedResults }),
-          });
-        } catch (saveError) {
-          console.error('Error saving results to database:', saveError);
-          // Continue even if saving to database fails
+        if (allResults.length === 0) {
+          setError("No data meet the criteria");
+        } else {
+          const sortedResults = sortResults(allResults, sortConfig);
+          setResults(sortedResults);
+          // Save results to the database
+          try {
+            await fetch('/api/saveResults', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fromDate, toDate, results: sortedResults }),
+            });
+          } catch (saveError) {
+            console.error('Error saving results to database:', saveError);
+            // Continue even if saving to database fails
+          }
         }
       }
     } catch (error) {
@@ -281,6 +295,18 @@ export default function DataCleaning() {
             <button type="submit" className={styles.button}>
               Search
             </button>
+          </div>
+          <div className={styles.checkboxGroup}>
+            <input
+              type="checkbox"
+              id="directSelect"
+              checked={directSelect}
+              onChange={(e) => setDirectSelect(e.target.checked)}
+              className={styles.checkbox}
+            />
+            <label htmlFor="directSelect" className={styles.checkboxLabel}>
+              Directly select from DB
+            </label>
           </div>
           <div className={styles.shortcutButtons}>
             <button type="button" onClick={handleSetLastMonth} className={styles.shortcutButton}>
