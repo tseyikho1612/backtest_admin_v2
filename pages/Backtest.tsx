@@ -262,13 +262,25 @@ export default function Backtest() {
     setSortConfig({ key, direction });
     
     const sortedData = [...backtestData].sort((a, b) => {
-      let aValue = a[key];
-      let bValue = b[key];
+      let aValue: number = 0;
+      let bValue: number = 0;
 
-      // Convert percentage strings to numbers for proper comparison
-      if (key === 'gap_up_percentage' || key === 'o2c_percentage' || key === 'spike_percentage') {
-        aValue = parseFloat(aValue as string);
-        bValue = parseFloat(bValue as string);
+      // Convert values to numbers, treating non-numeric values as 0
+      const numericKeys: (keyof BacktestData)[] = [
+        'open', 'close', 'high', 'low', 'gap_up_percentage', 'spike_percentage',
+        'o2c_percentage', 'volume', 'float', 'market_cap', 'profit'
+      ];
+
+      if (numericKeys.includes(key)) {
+        aValue = Number(a[key]) || 0;
+        bValue = Number(b[key]) || 0;
+      } else if (key === 'date') {
+        return direction === 'ascending' 
+          ? new Date(a.date).getTime() - new Date(b.date).getTime()
+          : new Date(b.date).getTime() - new Date(a.date).getTime();
+      } else {
+        aValue = a[key] as number;
+        bValue = b[key] as number;
       }
 
       if (aValue < bValue) return direction === 'ascending' ? -1 : 1;
