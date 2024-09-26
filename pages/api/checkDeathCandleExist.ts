@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { restClient } from '@polygon.io/client-js';
 import { format, parse } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { isWithinTradingHours } from '../../utils/dateUtils';
 
 const polygonClient = restClient(process.env.POLYGON_API_KEY);
 
@@ -53,10 +54,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const deathCandles: DeathCandle[] = response.results
       .filter((candle: any) => {
+        const candleTime = new Date(candle.t);
         const openToClosePercentage = ((candle.c - candle.o) / candle.o) * 100;
         const highToClosePercentage = ((candle.c - candle.h) / candle.h) * 100;
 
         return (
+          isWithinTradingHours(candleTime) && // Check if the candle is within trading hours
           (openToClosePercentage < -5) && // Long Red Candle
           (highToClosePercentage < -7) &&   // Long Wicked Red Candle
           (candle.v > 50000)
