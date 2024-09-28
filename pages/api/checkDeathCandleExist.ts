@@ -1,22 +1,21 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { restClient } from '@polygon.io/client-js';
-import { format, parse, subMinutes } from 'date-fns';
+import { format, parse, addMinutes } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
-import { isWithinTradingHours } from '../../utils/dateUtils';
+import { isWithinTradingHours, getTradingHours } from '../../utils/dateUtils';
 
 const polygonClient = restClient(process.env.POLYGON_API_KEY);
 
 interface DeathCandle {
-  timestamp: number;
+  // timestamp: number;
   time: string;
   open: number;
   close: number;
   high: number;
   low: number;
   openToClosePercentage: number;
-  highToClosePercentage: number;
-  priorFifteenMinutesChange: number;
   volume: number;
+  previousTwoCandlesChange: number;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -46,38 +45,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`Processing ${response.results.length} candles`);
 
-    const deathCandles: DeathCandle[] = response.results.slice(15).reduce((acc: DeathCandle[], candle, index) => {
+    const { start: marketOpenTime } = getTradingHours(parsedDate);
+
+    const deathCandles: DeathCandle[] = response.results.reduce((acc: DeathCandle[], candle, index) => {
       if (!isValidCandle(candle)) return acc;
 
       const candleTime = new Date(candle.t);
-      const priorCandle = response.results?.[index];
-
-      if (!isValidCandle(priorCandle)) return acc;
+      
+      if (!isWithinTradingHours(candleTime)) return acc;
 
       const openToClosePercentage = ((candle.c - candle.o) / candle.o) * 100;
-      const highToClosePercentage = ((candle.c - candle.h) / candle.h) * 100;
-      const priorFifteenMinutesChange = ((candle.o - priorCandle.o) / priorCandle.o) * 100;
 
-      if (
-        isWithinTradingHours(candleTime) &&
-        openToClosePercentage < -5 &&
-        highToClosePercentage < -7 &&
-        candle.v > 50000 &&
-        priorFifteenMinutesChange > 15
-      ) {
-        const hkTime = toZonedTime(candleTime, 'Asia/Hong_Kong');
-        acc.push({
-          timestamp: candle.t,
-          time: format(hkTime, 'HH:mm:ss'),
-          open: candle.o,
-          close: candle.c,
-          high: candle.h,
-          low: candle.l,
-          openToClosePercentage,
-          highToClosePercentage,
-          priorFifteenMinutesChange,
-          volume: candle.v
-        });
+      // Check if it's a red candle and openToClosePercentage is less than -5%
+      if (candle.c < candle.o && openToClosePercentage < -5) {
+        let isDeathCandle = false;
+
+        // If it's 10 minutes after market open, check previous two candles
+        if (candleTime >= addMinutes(marketOpenTime, 10) && index >= 2) {
+          const prevCandle1 = response.results?.[index - 1];
+          const prevCandle2 = response.results?.[index - 2];
+
+          if (isValidCandle(prevCandle1) && isValidCandle(prevCandle2)) {
+            const prevTwoCandlesChange = ((prevCandle1.c - prevCandle2.o) / prevCandle2.o) * 100;
+            const currentCandleChange = ((candle.c - prevCandle1.c) / prevCandle1.c) * 100;
+
+            // Check if prevTwoCandlesChange is positive and the current candle drops at least half of the previous two candles' cumulative change
+            isDeathCandle = prevTwoCandlesChange > 0 && Math.abs(currentCandleChange) >= Math.abs(prevTwoCandlesChange) / 2;
+
+            if (isDeathCandle) {
+              const hkTime = toZonedTime(candleTime, 'Asia/Hong_Kong');
+              acc.push({
+                // timestamp: candle.t,
+                time: format(hkTime, 'HH:mm:ss'),
+                open: candle.o,
+                close: candle.c,
+                high: candle.h,
+                low: candle.l,
+                openToClosePercentage,
+                volume: candle.v,
+                previousTwoCandlesChange: prevTwoCandlesChange
+              });
+            }
+          }
+        } else {
+          // If it's within the first 10 minutes, just add it as a death candle
+          const hkTime = toZonedTime(candleTime, 'Asia/Hong_Kong');
+          acc.push({
+            // timestamp: candle.t,
+            time: format(hkTime, 'HH:mm:ss'),
+            open: candle.o,
+            close: candle.c,
+            high: candle.h,
+            low: candle.l,
+            openToClosePercentage,
+            volume: candle.v,
+            previousTwoCandlesChange: 0 // Not applicable for first 10 minutes
+          });
+        }
       }
 
       return acc;

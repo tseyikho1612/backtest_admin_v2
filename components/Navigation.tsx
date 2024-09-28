@@ -32,6 +32,11 @@ const Navigation: React.FC<NavigationProps> = ({ selectedStrategy, setSelectedSt
             Backtest
           </span>
         </Link>
+        <Link href="/Backtest_v2" passHref>
+          <span className={`${styles.navButton} ${router.pathname === '/Backtest_v2' ? styles.activeNavButton : ''}`}>
+            Backtest_v2
+          </span>
+        </Link>
       </div>
     </nav>
   );
