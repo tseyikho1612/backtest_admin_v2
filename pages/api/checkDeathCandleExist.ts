@@ -7,7 +7,6 @@ import { isWithinTradingHours, getTradingHours } from '../../utils/dateUtils';
 const polygonClient = restClient(process.env.POLYGON_API_KEY);
 
 interface DeathCandle {
-  // timestamp: number;
   time: string;
   open: number;
   close: number;
@@ -16,17 +15,20 @@ interface DeathCandle {
   openToClosePercentage: number;
   volume: number;
   previousTwoCandlesChange: number;
+  isDeathCandle: boolean;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { ticker, date } = req.query;
+  const { ticker, date, debug } = req.query;
 
   if (!ticker || !date || typeof ticker !== 'string' || typeof date !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid required parameters' });
   }
 
+  const isDebug = debug === 'true';
+
   try {
-    console.log(`Received request for ticker: ${ticker}, date: ${date}`);
+    console.log(`Received request for ticker: ${ticker}, date: ${date}, debug: ${isDebug}`);
 
     const parsedDate = parse(date, 'yyyy-MM-dd', new Date());
     const formattedDate = format(parsedDate, 'yyyy-MM-dd');
@@ -47,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { start: marketOpenTime } = getTradingHours(parsedDate);
 
-    const deathCandles: DeathCandle[] = response.results.reduce((acc: DeathCandle[], candle, index) => {
+    const processedCandles: DeathCandle[] = response.results.reduce((acc: DeathCandle[], candle, index) => {
       if (!isValidCandle(candle)) return acc;
 
       const candleTime = new Date(candle.t);
@@ -55,66 +57,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!isWithinTradingHours(candleTime)) return acc;
 
       const openToClosePercentage = ((candle.c - candle.o) / candle.o) * 100;
+      let previousTwoCandlesChange = 0;
+      let previousTwoCandlesMiddlePrice = 0;
+      let isDeathCandle = false;
 
-      // Check if it's a red candle and openToClosePercentage is less than -5%
-      if (candle.c < candle.o && openToClosePercentage < -5) {
-        let isDeathCandle = false;
+      if (candleTime >= addMinutes(marketOpenTime, 10) && index >= 2) {
+        const prevCandle1 = response.results?.[index - 1];
+        const prevCandle2 = response.results?.[index - 2];
 
-        // If it's 10 minutes after market open, check previous two candles
-        if (candleTime >= addMinutes(marketOpenTime, 10) && index >= 2) {
-          const prevCandle1 = response.results?.[index - 1];
-          const prevCandle2 = response.results?.[index - 2];
+        if (isValidCandle(prevCandle1) && isValidCandle(prevCandle2)) {
+          previousTwoCandlesChange = ((prevCandle1.c - prevCandle2.o) / prevCandle2.o) * 100;
+          previousTwoCandlesMiddlePrice = (prevCandle2.l + prevCandle1.h) / 2;
+          const currentCandleChange = ((candle.c - prevCandle1.c) / prevCandle1.c) * 100;
 
-          if (isValidCandle(prevCandle1) && isValidCandle(prevCandle2)) {
-            const prevTwoCandlesChange = ((prevCandle1.c - prevCandle2.o) / prevCandle2.o) * 100;
-            const currentCandleChange = ((candle.c - prevCandle1.c) / prevCandle1.c) * 100;
-
-            // Check if prevTwoCandlesChange is positive and the current candle drops at least half of the previous two candles' cumulative change
-            isDeathCandle = prevTwoCandlesChange > 0 && Math.abs(currentCandleChange) >= Math.abs(prevTwoCandlesChange) / 2;
-
-            if (isDeathCandle) {
-              const hkTime = toZonedTime(candleTime, 'Asia/Hong_Kong');
-              acc.push({
-                // timestamp: candle.t,
-                time: format(hkTime, 'HH:mm:ss'),
-                open: candle.o,
-                close: candle.c,
-                high: candle.h,
-                low: candle.l,
-                openToClosePercentage,
-                volume: candle.v,
-                previousTwoCandlesChange: prevTwoCandlesChange
-              });
-            }
-          }
-        } else {
-          // If it's within the first 10 minutes, just add it as a death candle
-          const hkTime = toZonedTime(candleTime, 'Asia/Hong_Kong');
-          acc.push({
-            // timestamp: candle.t,
-            time: format(hkTime, 'HH:mm:ss'),
-            open: candle.o,
-            close: candle.c,
-            high: candle.h,
-            low: candle.l,
-            openToClosePercentage,
-            volume: candle.v,
-            previousTwoCandlesChange: 0 // Not applicable for first 10 minutes
-          });
+          isDeathCandle = candle.c < candle.o && 
+                          openToClosePercentage < -5 && 
+                          previousTwoCandlesChange > 0 &&                           
+                          previousTwoCandlesMiddlePrice >= candle.l ;
         }
+      } else {
+        isDeathCandle = candle.c < candle.o && openToClosePercentage < -5;
       }
+
+      const hkTime = toZonedTime(candleTime, 'Asia/Hong_Kong');
+      acc.push({
+        time: format(hkTime, 'HH:mm:ss'),
+        open: candle.o,
+        close: candle.c,
+        high: candle.h,
+        low: candle.l,
+        openToClosePercentage,
+        volume: candle.v,
+        previousTwoCandlesChange,
+        isDeathCandle
+      });
 
       return acc;
     }, []);
 
+    const deathCandles = processedCandles.filter(candle => candle.isDeathCandle);
+
     console.log(`Found ${deathCandles.length} death candles`);
 
-    res.status(200).json({
-      ticker,
-      date: formattedDate,
-      deathCandlesExist: deathCandles.length > 0,
-      deathCandles,
-    });
+    if (isDebug) {
+      res.status(200).json({
+        ticker,
+        date: formattedDate,
+        deathCandlesExist: deathCandles.length > 0,
+        allCandles: processedCandles,
+      });
+    } else {
+      res.status(200).json({
+        ticker,
+        date: formattedDate,
+        deathCandlesExist: deathCandles.length > 0,
+        deathCandles,
+      });
+    }
   } catch (error) {
     console.error('Error checking for death candles:', error);
     res.status(500).json({ 
