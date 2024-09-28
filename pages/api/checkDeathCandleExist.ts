@@ -1,91 +1,119 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { restClient } from '@polygon.io/client-js';
-import { format, parse } from 'date-fns';
+import { format, parse, addMinutes } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { isWithinTradingHours, getTradingHours } from '../../utils/dateUtils';
 
 const polygonClient = restClient(process.env.POLYGON_API_KEY);
 
 interface DeathCandle {
-  timestamp: number;
   time: string;
   open: number;
   close: number;
   high: number;
   low: number;
   openToClosePercentage: number;
-  highToClosePercentage: number;
+  volume: number;
+  previousTwoCandlesChange: number;
+  isDeathCandle: boolean;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { ticker, date } = req.query;
+  const { ticker, date, debug } = req.query;
 
-  if (!ticker || !date) {
-    return res.status(400).json({ error: 'Missing required parameters' });
+  if (!ticker || !date || typeof ticker !== 'string' || typeof date !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid required parameters' });
   }
 
-  try {
-    console.log(`Received request for ticker: ${ticker}, date: ${date}`);
+  const isDebug = debug === 'true';
 
-    // Parse the input date (YYYY-MM-DD) and format it for the API
-    const parsedDate = parse(date as string, 'yyyy-MM-dd', new Date());
+  try {
+    console.log(`Received request for ticker: ${ticker}, date: ${date}, debug: ${isDebug}`);
+
+    const parsedDate = parse(date, 'yyyy-MM-dd', new Date());
     const formattedDate = format(parsedDate, 'yyyy-MM-dd');
 
     console.log(`Formatted date: ${formattedDate}`);
-
-    // Fetch 3-minute aggregate bars for the given date
     console.log(`Fetching data from Polygon API...`);
-    const response = await polygonClient.stocks.aggregates(
-      ticker as string,
-      1,
-      'minute',
-      formattedDate,
-      formattedDate
-    );
+
+    const response = await polygonClient.stocks.aggregates(ticker, 1, 'minute', formattedDate, formattedDate);
 
     console.log(`Received response from Polygon API`);
 
-    if (!response.results) {
+    if (!response.results || response.results.length === 0) {
       console.log(`No results found for the given date`);
       return res.status(404).json({ error: 'No data found for the given date' });
     }
 
     console.log(`Processing ${response.results.length} candles`);
 
-    const deathCandles: DeathCandle[] = response.results
-      .filter((candle: any) => {
-        const openToClosePercentage = ((candle.c - candle.o) / candle.o) * 100;
-        const highToClosePercentage = ((candle.c - candle.h) / candle.h) * 100;
+    const { start: marketOpenTime } = getTradingHours(parsedDate);
 
-        return (
-          (openToClosePercentage < -5) && // Long Red Candle
-          (highToClosePercentage < -7) &&   // Long Wicked Red Candle
-          (candle.v > 50000)
-        );
-      })
-      .map((candle: any) => {
-        const utcTime = new Date(candle.t);
-        const hkTime = toZonedTime(utcTime, 'Asia/Hong_Kong');
-        return {
-          timestamp: candle.t,
-          time: format(hkTime, 'HH:mm:ss'),
-          open: candle.o,
-          close: candle.c,
-          high: candle.h,
-          low: candle.l,
-          openToClosePercentage: ((candle.c - candle.o) / candle.o) * 100,
-          highToClosePercentage: ((candle.c - candle.h) / candle.h) * 100,
-          volume: candle.v
-        };
+    const processedCandles: DeathCandle[] = response.results.reduce((acc: DeathCandle[], candle, index) => {
+      if (!isValidCandle(candle)) return acc;
+
+      const candleTime = new Date(candle.t);
+      
+      if (!isWithinTradingHours(candleTime)) return acc;
+
+      const openToClosePercentage = ((candle.c - candle.o) / candle.o) * 100;
+      let previousTwoCandlesChange = 0;
+      let previousTwoCandlesMiddlePrice = 0;
+      let isDeathCandle = false;
+
+      if (candleTime >= addMinutes(marketOpenTime, 10) && index >= 2) {
+        const prevCandle1 = response.results?.[index - 1];
+        const prevCandle2 = response.results?.[index - 2];
+
+        if (isValidCandle(prevCandle1) && isValidCandle(prevCandle2)) {
+          previousTwoCandlesChange = ((prevCandle1.c - prevCandle2.o) / prevCandle2.o) * 100;
+          previousTwoCandlesMiddlePrice = (prevCandle2.l + prevCandle1.h) / 2;
+          const currentCandleChange = ((candle.c - prevCandle1.c) / prevCandle1.c) * 100;
+
+          isDeathCandle = candle.c < candle.o && 
+                          openToClosePercentage < -5 && 
+                          previousTwoCandlesChange > 0 &&                           
+                          previousTwoCandlesMiddlePrice >= candle.l ;
+        }
+      } else {
+        isDeathCandle = candle.c < candle.o && openToClosePercentage < -5;
+      }
+
+      const hkTime = toZonedTime(candleTime, 'Asia/Hong_Kong');
+      acc.push({
+        time: format(hkTime, 'HH:mm:ss'),
+        open: candle.o,
+        close: candle.c,
+        high: candle.h,
+        low: candle.l,
+        openToClosePercentage,
+        volume: candle.v,
+        previousTwoCandlesChange,
+        isDeathCandle
       });
+
+      return acc;
+    }, []);
+
+    const deathCandles = processedCandles.filter(candle => candle.isDeathCandle);
 
     console.log(`Found ${deathCandles.length} death candles`);
 
-    res.status(200).json({
-      ticker,
-      date: formattedDate,
-      deathCandlesExist: deathCandles.length > 0,
-      deathCandles,
-    });
+    if (isDebug) {
+      res.status(200).json({
+        ticker,
+        date: formattedDate,
+        deathCandlesExist: deathCandles.length > 0,
+        allCandles: processedCandles,
+      });
+    } else {
+      res.status(200).json({
+        ticker,
+        date: formattedDate,
+        deathCandlesExist: deathCandles.length > 0,
+        deathCandles,
+      });
+    }
   } catch (error) {
     console.error('Error checking for death candles:', error);
     res.status(500).json({ 
@@ -93,4 +121,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       details: error instanceof Error ? error.message : String(error)
     });
   }
+}
+
+function isValidCandle(candle: any): candle is { t: number; o: number; c: number; h: number; l: number; v: number } {
+  return (
+    candle &&
+    typeof candle.t === 'number' &&
+    typeof candle.o === 'number' &&
+    typeof candle.c === 'number' &&
+    typeof candle.h === 'number' &&
+    typeof candle.l === 'number' &&
+    typeof candle.v === 'number'
+  );
 }

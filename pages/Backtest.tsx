@@ -23,7 +23,7 @@ interface BacktestData {
   volume: number | string;
   float: number | string | null;
   market_cap: number | string | null;
-  profit: number;
+  profit?: number;
   entryPrice?: number;
   exitPrice?: number;
 }
@@ -31,6 +31,18 @@ interface BacktestData {
 interface SortConfig {
   key: keyof BacktestData;
   direction: 'ascending' | 'descending';
+}
+
+interface DeathCandle {
+  timestamp: number;
+  time: string;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+  openToClosePercentage: number;
+  highToClosePercentage: number;
+  priorFifteenMinutesChange: number;
 }
 
 export default function Backtest() {
@@ -106,14 +118,18 @@ export default function Backtest() {
         const updatedData = await Promise.all(data.map(async (item: BacktestData) => {
           let entryPrice = Number(item.open);
           let exitPrice = Number(item.close);
+          let includeRecord = true;
+          let deathCandleInfo: DeathCandle | null = null;
 
           if (entryMethod === 'at 1st Death Candle') {
             const formattedDate = format(new Date(item.date), 'yyyy-MM-dd');
             const deathCandleResponse = await fetch(`/api/checkDeathCandleExist?ticker=${item.ticker}&date=${formattedDate}`);
             const deathCandleData = await deathCandleResponse.json();
             if (deathCandleData.deathCandlesExist) {
-              const firstDeathCandle = deathCandleData.deathCandles[0];
-              entryPrice = firstDeathCandle.close;
+              deathCandleInfo = deathCandleData.deathCandles[0];
+              entryPrice = deathCandleInfo.close;
+            } else {
+              includeRecord = false;
             }
           }
 
@@ -121,15 +137,17 @@ export default function Backtest() {
             exitPrice = Number(item.high);
           }
 
-          return {
+          return includeRecord ? {
             ...item,
             entryPrice,
             exitPrice,
-            profit: calculateProfit(item, entryPrice, exitPrice)
-          };
+            profit: calculateProfit(item, entryPrice, exitPrice),
+            deathCandleInfo
+          } : null;
         }));
 
-        const sortedData = sortResults(updatedData, sortConfig);
+        const filteredData = updatedData.filter((item): item is BacktestData & { deathCandleInfo: DeathCandle | null } => item !== null);
+        const sortedData = sortResults(filteredData, sortConfig);
         setBacktestData(sortedData);
         updateChartData(sortedData);
         calculateStats(sortedData);
@@ -178,7 +196,8 @@ export default function Backtest() {
   const calculateAccumulativeProfits = (data: BacktestData[]) => {
     let accumulativeProfit = 0;
     return data.map(item => {
-      accumulativeProfit += item.profit;
+      const profit = item.profit ?? 0;
+      accumulativeProfit += profit;
       return accumulativeProfit;
     });
   };
@@ -186,7 +205,7 @@ export default function Backtest() {
   const calculateStats = (data: BacktestData[]) => {
     const totalTrades = data.length;
     
-    const profitableTrades = data.filter(item => item.profit > 0).length;
+    const profitableTrades = data.filter(item => item.profit && item.profit > 0).length;
     const percentProfitable = (profitableTrades / totalTrades) * 100;
 
     let maxDrawdown = 0;
@@ -198,7 +217,7 @@ export default function Backtest() {
     let previousAccumulativeProfit = 0;
 
     data.forEach(item => {
-      const profit = item.profit;
+      const profit = item.profit ?? 0;
       accumulativeProfit += profit;
       
       if (profit > 0) {
@@ -543,6 +562,9 @@ export default function Backtest() {
                   <th className={styles.thLeftAlign} onClick={() => handleSort('profit')}>
                     Profit{getSortIndicator('profit')}
                   </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('deathCandleInfo.priorFifteenMinutesChange')}>
+                    15min Change{getSortIndicator('deathCandleInfo.priorFifteenMinutesChange')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -562,9 +584,10 @@ export default function Backtest() {
                     <td>{item.market_cap ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
                     <td>{item.entryPrice?.toFixed(2)}</td>
                     <td>{item.exitPrice?.toFixed(2)}</td>
-                    <td className={item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
+                    <td className={item.profit !== undefined && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
                       {item.profit !== undefined ? item.profit.toFixed(2) : 'N/A'}%
                     </td>
+                    <td>{item.deathCandleInfo ? `${item.deathCandleInfo.priorFifteenMinutesChange.toFixed(2)}%` : 'N/A'}</td>
                   </tr>
                 ))}
               </tbody>
