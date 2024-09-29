@@ -551,6 +551,7 @@ export default function Backtest() {
             <table id="backtestResultsTable" className={styles.table}>
               <thead>
                 <tr>
+                  <th className={styles.thLeftAlign}>Row</th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('date')}>
                     Date{getSortIndicator('date')}
                   </th>
@@ -604,6 +605,7 @@ export default function Backtest() {
               <tbody>
                 {backtestData.map((item, index) => (
                   <tr key={index}>
+                    <td>{index + 1}</td>
                     <td>{format(new Date(item.date), 'dd-MM-yy')}</td>
                     <td>{item.ticker}</td>
                     <td>{Number(item.open).toFixed(2)}</td>
