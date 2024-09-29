@@ -24,6 +24,7 @@ export interface BacktestResult extends BacktestData {
   exitPrice?: number;
   profit?: number | string; // Changed from just number to number | string
   stopLossTime?: string;
+  entryTime?: string; // Add this line
 }
 
 export async function runDeathCandleStrategy(data: BacktestData[]): Promise<BacktestResult[]> {

@@ -522,6 +522,15 @@ export default function Backtest_v2() {
                   <th className={styles.thLeftAlign} onClick={() => handleSort('market_cap')}>
                     Market Cap{getSortIndicator('market_cap')}
                   </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('entryPrice')}>
+                    Entry Price{getSortIndicator('entryPrice')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('exitPrice')}>
+                    Exit Price{getSortIndicator('exitPrice')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('entryTime')}>
+                    Entry Time{getSortIndicator('entryTime')}
+                  </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('profit')}>
                     Profit{getSortIndicator('profit')}
                   </th>
@@ -544,6 +553,9 @@ export default function Backtest_v2() {
                       <td>{Number(item.volume).toLocaleString()}</td>
                       <td>{item.float ? Number(item.float).toLocaleString() : 'N/A'}</td>
                       <td>{item.market_cap ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
+                      <td>{item.entryPrice ? Number(item.entryPrice).toFixed(2) : 'N/A'}</td>
+                      <td>{item.exitPrice ? Number(item.exitPrice).toFixed(2) : 'N/A'}</td>
+                      <td>{item.entryTime || 'N/A'}</td>
                       <td className={item.profit !== undefined && Number(item.profit) >= 0 ? styles.profitPositive : styles.profitNegative}>
                         {item.profit !== undefined && item.profit !== null
                           ? typeof item.profit === 'number'
@@ -555,7 +567,7 @@ export default function Backtest_v2() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={14}>No data available</td>
+                    <td colSpan={17}>No data available</td>
                   </tr>
                 )}
               </tbody>
