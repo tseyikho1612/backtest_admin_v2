@@ -6,37 +6,21 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
 import { format } from 'date-fns';
-import { Trash2 } from 'react-feather';
+import { Trash2, Save, Play, List } from 'react-feather';
+import { runDeathCandleStrategy, BacktestData, BacktestResult } from '../strategies/DeathCandleStrategy';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-interface BacktestData {
-  ticker: string;
-  date: string;
-  gap_up_percentage: number | string;
-  open: number | string;
-  close: number | string;
-  high: number | string;
-  low: number | string;
-  spike_percentage: number | string;
-  o2c_percentage: number | string;
-  volume: number | string;
-  float: number | string | null;
-  market_cap: number | string | null;
-  profit?: number;
-  entryPrice?: number;
-  exitPrice?: number;
-}
-
 interface SortConfig {
-  key: keyof BacktestData;
+  key: keyof BacktestResult;
   direction: 'ascending' | 'descending';
 }
 
 export default function Backtest_v2() {
-  const [selectedStrategy, setSelectedStrategy] = useState('Gap Up Short');
+  const [selectedStrategy, setSelectedStrategy] = useState('Death Candle');
+  const strategies = ['Death Candle']; // Add more strategies here as they are implemented
   const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] });
-  const [backtestData, setBacktestData] = useState<BacktestData[]>([]);
+  const [backtestData, setBacktestData] = useState<BacktestResult[]>([]);
   const [dataSetNames, setDataSetNames] = useState<string[]>([]);
   const [selectedDataSet, setSelectedDataSet] = useState('');
   const [stats, setStats] = useState({
@@ -134,7 +118,7 @@ export default function Backtest_v2() {
     return profit;
   };
 
-  const updateChartData = (data: BacktestData[]) => {
+  const updateChartData = (data: BacktestResult[]) => {
     const labels = data.map((item) => format(new Date(item.date), 'dd-MM-yy'));
     const profits = calculateAccumulativeProfits(data);
     
@@ -151,17 +135,56 @@ export default function Backtest_v2() {
     });
   };
 
-  const calculateAccumulativeProfits = (data: BacktestData[]) => {
+  const calculateAccumulativeProfits = (data: BacktestResult[]) => {
     let accumulativeProfit = 0;
     return data.map(item => {
-      const profit = item.profit ?? 0;
+      const profit = Number(item.profit) || 0;
       accumulativeProfit += profit;
       return accumulativeProfit;
     });
   };
 
-  const calculateStats = (data: BacktestData[]) => {
-    // ... (same as in Backtest.tsx)
+  const calculateStats = (data: BacktestResult[]) => {
+    const totalTrades = data.length;
+    const profitableTrades = data.filter(item => Number(item.profit) > 0).length;
+    const percentProfitable = (profitableTrades / totalTrades) * 100;
+    
+    let maxDrawdown = 0;
+    let peak = 0;
+    let accumulativeProfit = 0;
+    let totalProfit = 0;
+    let totalLoss = 0;
+    
+    data.forEach(item => {
+      const profit = Number(item.profit) || 0;
+      accumulativeProfit += profit;
+      
+      if (profit > 0) {
+        totalProfit += profit;
+      } else {
+        totalLoss -= profit;
+      }
+
+      if (accumulativeProfit > peak) {
+        peak = accumulativeProfit;
+      }
+      const drawdown = peak - accumulativeProfit;
+      if (drawdown > maxDrawdown) {
+        maxDrawdown = drawdown;
+      }
+    });
+
+    const avgTrade = accumulativeProfit / totalTrades;
+    const profitFactor = totalLoss !== 0 ? totalProfit / totalLoss : totalProfit > 0 ? Infinity : 0;
+    
+    setStats({
+      totalTrades,
+      percentProfitable,
+      profitFactor,
+      maxDrawdown,
+      avgTrade,
+      sharpeRatio: 0, // You may want to implement Sharpe Ratio calculation if needed
+    });
   };
 
   const handleDeleteDataset = async (datasetName: string) => {
@@ -189,6 +212,108 @@ export default function Backtest_v2() {
       return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
     }
     return '';
+  };
+
+  const handleStrategyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedStrategy(e.target.value);
+  };
+
+  const handleRunBacktest = async () => {
+    if (!selectedDataSet) {
+      alert('Please select a dataset first.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/getBacktestData', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataSetName: selectedDataSet }),
+      });
+      const data: BacktestData[] = await response.json();
+
+      let backtestResults: BacktestResult[];
+
+      switch (selectedStrategy) {
+        case 'Death Candle':
+          backtestResults = await runDeathCandleStrategy(data);
+          break;
+        // Add more cases for other strategies here
+        default:
+          throw new Error(`Unknown strategy: ${selectedStrategy}`);
+      }
+
+      setBacktestData(backtestResults);
+      updateChartData(backtestResults);
+      calculateStats(backtestResults);
+
+    } catch (error) {
+      console.error('Error running backtest:', error);
+      alert(`Error running backtest: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleInsertResults = async () => {
+    if (backtestData.length === 0) {
+      alert('Please run the backtest first.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/insertBacktestResults', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dataSetName: selectedDataSet,
+          strategyName: selectedStrategy,
+          results: backtestData
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Successfully inserted ${data.insertedCount} records.`);
+      } else {
+        const errorData = await response.json();
+        alert(`Error inserting results: ${errorData.message}`);
+      }
+    } catch (error) {
+      console.error('Error inserting backtest results:', error);
+      alert(`Error inserting backtest results: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleSelectResults = async () => {
+    if (!selectedDataSet || !selectedStrategy) {
+      alert('Please select both a dataset and a strategy.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/selectBacktestResults', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dataSetName: selectedDataSet,
+          strategyName: selectedStrategy,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const results = data.results as BacktestResult[];
+        setBacktestData(results);
+        updateChartData(results);
+        calculateStats(results);
+        // Removed the success alert message
+      } else {
+        const errorData = await response.json();
+        alert(`Error selecting results: ${errorData.message}`);
+      }
+    } catch (error) {
+      console.error('Error selecting backtest results:', error);
+      alert(`Error selecting backtest results: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
 
   return (
@@ -230,6 +355,45 @@ export default function Backtest_v2() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div className={styles.settingGroup}>
+            <label htmlFor="strategy">Strategy:</label>
+            <select 
+              id="strategy" 
+              value={selectedStrategy} 
+              onChange={handleStrategyChange}
+              className={styles.comboBox}
+            >
+              {strategies.map((strategy) => (
+                <option key={strategy} value={strategy}>{strategy}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.settingGroup}>
+            <button
+              className={styles.runButton}
+              onClick={handleRunBacktest}
+            >
+              <Play size={16} />
+              Run
+            </button>
+            <button
+              className={styles.selectButton}
+              onClick={handleSelectResults}
+            >
+              <List size={16} />
+              Select
+            </button>
+            <button
+              className={styles.insertButton}
+              onClick={handleInsertResults}
+              disabled={backtestData.length === 0}
+            >
+              <Save size={16} />
+              Insert
+            </button>
           </div>
 
           <div className={styles.settingGroup}>
@@ -321,6 +485,7 @@ export default function Backtest_v2() {
             <table id="backtestResultsTable" className={styles.table}>
               <thead>
                 <tr>
+                  <th className={styles.thLeftAlign}>Row</th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('date')}>
                     Date{getSortIndicator('date')}
                   </th>
@@ -357,6 +522,15 @@ export default function Backtest_v2() {
                   <th className={styles.thLeftAlign} onClick={() => handleSort('market_cap')}>
                     Market Cap{getSortIndicator('market_cap')}
                   </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('entryPrice')}>
+                    Entry Price{getSortIndicator('entryPrice')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('exitPrice')}>
+                    Exit Price{getSortIndicator('exitPrice')}
+                  </th>
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('entryTime')}>
+                    Entry Time{getSortIndicator('entryTime')}
+                  </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('profit')}>
                     Profit{getSortIndicator('profit')}
                   </th>
@@ -366,6 +540,7 @@ export default function Backtest_v2() {
                 {backtestData && backtestData.length > 0 ? (
                   backtestData.map((item, index) => (
                     <tr key={index}>
+                      <td>{index + 1}</td>
                       <td>{format(new Date(item.date), 'dd-MM-yy')}</td>
                       <td>{item.ticker}</td>
                       <td>{Number(item.open).toFixed(2)}</td>
@@ -378,14 +553,21 @@ export default function Backtest_v2() {
                       <td>{Number(item.volume).toLocaleString()}</td>
                       <td>{item.float ? Number(item.float).toLocaleString() : 'N/A'}</td>
                       <td>{item.market_cap ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
-                      <td className={item.profit !== undefined && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
-                        {item.profit !== undefined ? item.profit.toFixed(2) : 'N/A'}%
+                      <td>{item.entryPrice ? Number(item.entryPrice).toFixed(2) : 'N/A'}</td>
+                      <td>{item.exitPrice ? Number(item.exitPrice).toFixed(2) : 'N/A'}</td>
+                      <td>{item.entryTime || 'N/A'}</td>
+                      <td className={item.profit !== undefined && Number(item.profit) >= 0 ? styles.profitPositive : styles.profitNegative}>
+                        {item.profit !== undefined && item.profit !== null
+                          ? typeof item.profit === 'number'
+                            ? item.profit.toFixed(2)
+                            : Number(item.profit).toFixed(2)
+                          : 'N/A'}%
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={13}>No data available</td>
+                    <td colSpan={17}>No data available</td>
                   </tr>
                 )}
               </tbody>
