@@ -34,7 +34,8 @@ interface SortConfig {
 }
 
 export default function Backtest_v2() {
-  const [selectedStrategy, setSelectedStrategy] = useState('Gap Up Short');
+  const [selectedStrategy, setSelectedStrategy] = useState('Death Candle');
+  const strategies = ['Death Candle']; // Add more strategies here as they are implemented
   const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] });
   const [backtestData, setBacktestData] = useState<BacktestData[]>([]);
   const [dataSetNames, setDataSetNames] = useState<string[]>([]);
@@ -191,6 +192,17 @@ export default function Backtest_v2() {
     return '';
   };
 
+  const handleStrategyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedStrategy(e.target.value);
+  };
+
+  const handleRunBacktest = () => {
+    // TODO: Implement backtest running logic
+    console.log('Running backtest with strategy:', selectedStrategy);
+    // For now, we'll just call fetchBacktestData
+    fetchBacktestData();
+  };
+
   return (
     <div className={styles.container}>
       <Head>
@@ -230,6 +242,29 @@ export default function Backtest_v2() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div className={styles.settingGroup}>
+            <label htmlFor="strategy">Strategy:</label>
+            <select 
+              id="strategy" 
+              value={selectedStrategy} 
+              onChange={handleStrategyChange}
+              className={styles.comboBox}
+            >
+              {strategies.map((strategy) => (
+                <option key={strategy} value={strategy}>{strategy}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.settingGroup}>
+            <button
+              className={styles.runButton}
+              onClick={handleRunBacktest}
+            >
+              Run
+            </button>
           </div>
 
           <div className={styles.settingGroup}>

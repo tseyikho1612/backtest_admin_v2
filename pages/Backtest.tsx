@@ -6,7 +6,7 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
 import { format } from 'date-fns';
-import { Trash2 } from 'react-feather';
+import { Trash2, Download } from 'react-feather';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -348,6 +348,30 @@ export default function Backtest() {
     return '';
   };
 
+  const handleDownloadIntradayData = async () => {
+    if (!selectedDataSet) {
+      alert('Please select a dataset first.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/downloadIntradayData', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataSetName: selectedDataSet }),
+      });
+
+      const data = await response.json();
+
+      // Display the result message, which now includes error details if any
+      alert(data.message);
+
+    } catch (error) {
+      console.error('Error downloading intraday data:', error);
+      alert(`Error downloading intraday data: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   return (
     <div className={styles.container}>
       <Head>
@@ -378,15 +402,25 @@ export default function Backtest() {
                 ))}
               </select>
               {selectedDataSet && (
-                <button
-                  className={styles.deleteDatasetButton}
-                  onClick={() => handleDeleteDataset(selectedDataSet)}
-                  title="Delete selected dataset"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <>
+                  <button
+                    className={styles.deleteDatasetButton}
+                    onClick={() => handleDeleteDataset(selectedDataSet)}
+                    title="Delete selected dataset"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+
+                </>
               )}
             </div>
+            <button
+                    className={styles.downloadIntradayButton}
+                    onClick={handleDownloadIntradayData}
+                    title="Download Intraday Data"
+                  >
+                    <Download size={16} />
+                  </button>
           </div>
 
           <div className={styles.settingGroup}>
