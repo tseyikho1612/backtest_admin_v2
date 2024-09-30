@@ -5,8 +5,8 @@ import Navigation from '../components/Navigation';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
-import { format } from 'date-fns';
-import { Trash2, Save, Play, List } from 'react-feather';
+import { format, parse } from 'date-fns';
+import { Trash2, Save, Play, List, Download } from 'react-feather';
 import { runDeathCandleStrategy, BacktestData, BacktestResult } from '../strategies/DeathCandleStrategy';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -34,6 +34,7 @@ export default function Backtest_v2() {
   const [commissions, setCommissions] = useState('3');
   const [applyCommissions, setApplyCommissions] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'ascending' });
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchDataSetNames();
@@ -316,6 +317,92 @@ export default function Backtest_v2() {
     }
   };
 
+  async function handleDownload1minData() {
+    try {
+      setIsLoading(true);
+
+      // Step 1: Select ticker and date using selectBacktestResults API
+      const selectResponse = await fetch('/api/selectBacktestResults', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dataSetName: selectedDataSet,
+          strategyName: selectedStrategy,
+        }),
+      });
+
+      if (!selectResponse.ok) {
+        const errorData = await selectResponse.json();
+        alert(`Error selecting results: ${errorData.message}`);
+        return;
+      }
+
+      const { results } = await selectResponse.json();
+
+      if (results.length === 0) {
+        alert('No data found for the selected dataset and strategy');
+        return;
+      }
+
+      // Step 2: Download and insert 1-minute data for each ticker and date
+      for (const item of results) {
+        const { ticker, date } = item;
+        
+        // Format date and fetch data from Polygon API
+        const parsedDate = parse(date, 'yyyy-MM-dd', new Date());
+        const formattedDate = format(parsedDate, 'yyyy-MM-dd');
+        
+        const response = await fetch(`/api/downloadIntradayData?ticker=${ticker}&date=${formattedDate}`);
+        const data = await response.json();
+
+        if (data.error) {
+          alert(`Error fetching data for ${ticker} on ${formattedDate}: ${data.error}`);
+          continue;
+        }
+
+        // Prepare candles data for insertion
+        const candles = data.results.map((candle: any) => {
+          const candleTime = new Date(candle.t);
+          return {
+            time: format(candleTime, 'HH:mm:ss'),
+            open: candle.o,
+            high: candle.h,
+            low: candle.l,
+            close: candle.c,
+            volume: candle.v
+          };
+        });
+
+        // Insert 1-minute data into the database using the new API
+        const insertResponse = await fetch('/api/insertIntraday1minData', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            datasetId: selectedDataSet,
+            ticker,
+            date: formattedDate,
+            candles
+          }),
+        });
+
+        if (!insertResponse.ok) {
+          const errorData = await insertResponse.json();
+          alert(`Error inserting data for ${ticker} on ${formattedDate}: ${errorData.message}`);
+          continue;
+        }
+
+        alert(`Downloaded and inserted 1-minute data for ${ticker} on ${formattedDate}`);
+      }
+
+      alert('Finished downloading and inserting 1-minute data for all tickers');
+    } catch (error) {
+      console.error('Error in handleDownload1minData:', error);
+      alert('An error occurred while downloading and inserting 1-minute data');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <div className={styles.container}>
       <Head>
@@ -355,6 +442,15 @@ export default function Backtest_v2() {
                 </button>
               )}
             </div>
+
+            <button
+                className={styles.downloadIntradayButton}
+                onClick={handleDownload1minData}
+                    title="Download 1 min Data"
+                  >
+                    <Download size={16} />
+            </button>
+
           </div>
 
           <div className={styles.settingGroup}>
