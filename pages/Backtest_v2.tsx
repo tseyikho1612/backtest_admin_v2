@@ -5,8 +5,8 @@ import Navigation from '../components/Navigation';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
-import { format } from 'date-fns';
-import { Trash2, Save, Play, List } from 'react-feather';
+import { format, parse } from 'date-fns';
+import { Trash2, Save, Play, List, Download } from 'react-feather';
 import { runDeathCandleStrategy, BacktestData, BacktestResult } from '../strategies/DeathCandleStrategy';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -34,6 +34,7 @@ export default function Backtest_v2() {
   const [commissions, setCommissions] = useState('3');
   const [applyCommissions, setApplyCommissions] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'ascending' });
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchDataSetNames();
@@ -79,25 +80,41 @@ export default function Backtest_v2() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dataSetName: selectedDataSet }),
       });
-      const data = await response.json();
-      
-      if (data && data.length > 0) {
-        const updatedData = data.map((item: BacktestData) => ({
-          ...item,
-          entryPrice: Number(item.open),
-          exitPrice: Number(item.close),
-          profit: calculateProfit(item)
-        }));
 
-        const sortedData = sortResults(updatedData, sortConfig);
-        setBacktestData(sortedData);
-        updateChartData(sortedData);
-        calculateStats(sortedData);
-      } else {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Received data:', data); // Log the received data
+
+      if (!data || !Array.isArray(data)) {
+        console.error('Invalid data structure received:', data);
         setBacktestData([]);
         updateChartData([]);
         calculateStats([]);
+        return;
       }
+      
+      if (data.length === 0) {
+        console.log('No data received for the selected dataset');
+        setBacktestData([]);
+        updateChartData([]);
+        calculateStats([]);
+        return;
+      }
+
+      const updatedData = data.map((item: BacktestData) => ({
+        ...item,
+        entryPrice: Number(item.open),
+        exitPrice: Number(item.close),
+        profit: calculateProfit(item)
+      }));
+
+      const sortedData = sortResults(updatedData, sortConfig);
+      setBacktestData(sortedData);
+      updateChartData(sortedData);
+      calculateStats(sortedData);
     } catch (error) {
       console.error('Error fetching backtest data:', error);
       setBacktestData([]);
@@ -316,6 +333,105 @@ export default function Backtest_v2() {
     }
   };
 
+  async function handleDownload1minData() {
+    try {
+      setIsLoading(true);
+
+      // Step 1: Select ticker and date using selectBacktestResults API
+      const selectResponse = await fetch('/api/selectBacktestResults', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dataSetName: selectedDataSet,
+          strategyName: selectedStrategy,
+        }),
+      });
+
+      if (!selectResponse.ok) {
+        const errorData = await selectResponse.json();
+        throw new Error(`Error selecting results: ${errorData.message}`);
+      }
+
+      const { results } = await selectResponse.json();
+
+      if (results.length === 0) {
+        throw new Error('No data found for the selected dataset and strategy');
+      }
+
+      // Step 2: Download and insert 1-minute data for each ticker and date
+      for (const item of results) {
+        const { ticker, date } = item;
+        
+        try {
+          // Format date correctly
+          const parsedDate = new Date(date);
+          const formattedDate = format(parsedDate, 'yyyy-MM-dd');
+          
+          console.log(`Fetching data for ${ticker} on ${formattedDate}`);
+          const response = await fetch(`/api/downloadIntradayData?ticker=${ticker}&date=${formattedDate}`);
+          const data = await response.json();
+
+          if (data.error) {
+            throw new Error(`Error fetching data: ${data.error}`);
+          }
+
+          // Prepare candles data for insertion
+          const candles = data.results.map((candle: any) => {
+            const candleTime = new Date(candle.t);
+            return {
+              time: format(candleTime, 'HH:mm:ss'),
+              open: candle.o,
+              high: candle.h,
+              low: candle.l,
+              close: candle.c,
+              volume: candle.v
+            };
+          });
+
+          console.log(`Inserting ${candles.length} candles for ${ticker} on ${formattedDate}, datasetName: ${selectedDataSet}`);
+          // Insert 1-minute data into the database using the new API
+          const insertResponse = await fetch('/api/insertIntraday1minData', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              datasetName: selectedDataSet,
+              ticker,
+              date: formattedDate,
+              candles
+            }),
+          });
+
+          if (!insertResponse.ok) {
+            const contentType = insertResponse.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+              const errorData = await insertResponse.json();
+              throw new Error(`Error inserting data: ${errorData.message}`);
+            } else {
+              const textError = await insertResponse.text();
+              console.error('Non-JSON error response:', textError);
+              throw new Error(`Error inserting data: Non-JSON response received. Status: ${insertResponse.status}`);
+            }
+          }
+
+          const responseData = await insertResponse.json();
+          console.log(`Successfully inserted data for ${ticker} on ${formattedDate}:`, responseData);
+          // alert(`Inserted data for ${ticker} on ${formattedDate}. Dataset ID: ${responseData.datasetId}, Dataset Name: ${responseData.datasetName}`);
+
+        } catch (itemError) {
+          console.error(`Error processing ${ticker} on ${date}:`, itemError);
+          // alert(`Error processing ${ticker} on ${date}: ${itemError instanceof Error ? itemError.message : String(itemError)}`);
+        }
+      }
+
+      alert('Finished downloading and inserting 1-minute data for all tickers');
+    } catch (error) {
+      console.error('Error in handleDownload1minData:', error);
+      // alert(`An error occurred while downloading and inserting 1-minute data: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <div className={styles.container}>
       <Head>
@@ -355,6 +471,15 @@ export default function Backtest_v2() {
                 </button>
               )}
             </div>
+
+            <button
+                className={styles.downloadIntradayButton}
+                onClick={handleDownload1minData}
+                    title="Download 1 min Data"
+                  >
+                    <Download size={16} />
+            </button>
+
           </div>
 
           <div className={styles.settingGroup}>
