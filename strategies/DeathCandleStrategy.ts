@@ -16,15 +16,24 @@ export interface DeathCandle {
   close: number;
   high: number;
   low: number;
+  stopLossPrice: number;
+  stopLossTriggered: boolean;
+  stopLossTime?: string;
   // ... other fields
 }
 
 export interface BacktestResult extends BacktestData {
-  entryPrice?: number;
-  exitPrice?: number;
-  profit?: number | string; // Changed from just number to number | string
+  entryprice?: number;
+  exitprice?: number;
+  profit?: number;
   stopLossTime?: string;
-  entryTime?: string; // Add this line
+  entryTime?: string;
+  gap_up_percentage?: number;
+  spike_percentage?: number;
+  o2c_percentage?: number;
+  volume?: number;
+  float?: number;
+  market_cap?: number;
 }
 
 export async function runDeathCandleStrategy(data: BacktestData[]): Promise<BacktestResult[]> {
@@ -38,16 +47,15 @@ export async function runDeathCandleStrategy(data: BacktestData[]): Promise<Back
     if (deathCandleData.deathCandlesExist) {
       const deathCandle = deathCandleData.deathCandles[0];
       const entryPrice = deathCandle.close;
-      const stopLossPrice = deathCandle.high * 1.02;
       const exitPrice = Number(item.close);
 
       let profit: number;
       let stopLossTime: string | undefined;
 
-      if (stopLossPrice < Number(item.high)) {
+      if (deathCandle.stopLossTriggered) {
         // Stop loss triggered
-        profit = ((entryPrice - stopLossPrice) / entryPrice) * 100;
-        stopLossTime = deathCandle.time; // This is an approximation
+        profit = ((entryPrice - deathCandle.stopLossPrice) / entryPrice) * 100;
+        stopLossTime = deathCandle.stopLossTime;
       } else {
         // Exit at close
         profit = ((entryPrice - exitPrice) / entryPrice) * 100;
@@ -55,10 +63,11 @@ export async function runDeathCandleStrategy(data: BacktestData[]): Promise<Back
 
       backtestResults.push({
         ...item,
-        entryPrice,
-        exitPrice,
+        entryprice: entryPrice,
+        exitprice: exitPrice,
         profit,
-        stopLossTime
+        stopLossTime,
+        entryTime: deathCandle.time,
       });
     }
   }
