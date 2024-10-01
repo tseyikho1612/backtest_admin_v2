@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`Processing ${response.results.length} candles`);
 
-    const { start: marketOpenTime } = getTradingHours(parsedDate);
+    const { start: marketOpenTime, end: marketCloseTime } = getTradingHours(parsedDate);
 
     const processedCandles: DeathCandle[] = response.results.reduce((acc: DeathCandle[], candle, index) => {
       if (!isValidCandle(candle)) return acc;
@@ -97,6 +97,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const deathCandles = processedCandles.filter(candle => candle.isDeathCandle);
 
+    // Modify this part to process post-entry candles
+    const deathCandlesWithPostEntryData = deathCandles.map(deathCandle => {
+      const deathCandleIndex = processedCandles.findIndex(c => c.time === deathCandle.time);
+      const postEntryCandles = processedCandles.slice(deathCandleIndex + 1);
+      const stopLossPrice = deathCandle.high * 1.02;
+      const stopLossTriggered = postEntryCandles.some(candle => {
+        const candleDateTime = new Date(`${formattedDate}T${candle.time}`);
+        return isWithinTradingHours(candleDateTime) && candle.high > stopLossPrice;
+      });
+      const stopLossTime = stopLossTriggered 
+        ? postEntryCandles.find(candle => candle.high > stopLossPrice)?.time 
+        : undefined;
+
+      return {
+        ...deathCandle,
+        stopLossPrice,
+        stopLossTriggered,
+        stopLossTime,
+      };
+    });
+
     console.log(`Found ${deathCandles.length} death candles`);
 
     if (isDebug) {
@@ -105,13 +126,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         date: formattedDate,
         deathCandlesExist: deathCandles.length > 0,
         allCandles: processedCandles,
+        deathCandles: deathCandlesWithPostEntryData,
       });
     } else {
       res.status(200).json({
         ticker,
         date: formattedDate,
         deathCandlesExist: deathCandles.length > 0,
-        deathCandles,
+        deathCandles: deathCandlesWithPostEntryData,
       });
     }
   } catch (error) {

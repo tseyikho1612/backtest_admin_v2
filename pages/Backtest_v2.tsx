@@ -59,6 +59,10 @@ export default function Backtest_v2() {
     }
   }, [applyCommissions, commissions]);
 
+  useEffect(() => {
+    console.log('BacktestData state in useEffect:', backtestData);
+  }, [backtestData]);
+
   const fetchDataSetNames = async () => {
     try {
       const response = await fetch('/api/getDataSetNames');
@@ -104,12 +108,20 @@ export default function Backtest_v2() {
         return;
       }
 
-      const updatedData = data.map((item: BacktestData) => ({
+      const updatedData = data.map((item: BacktestResult) => ({
         ...item,
-        entryPrice: Number(item.open),
-        exitPrice: Number(item.close),
-        profit: calculateProfit(item)
+        entryPrice: item.entryprice != null ? Number(item.entryprice) : undefined,
+        exitPrice: item.exitprice != null ? Number(item.exitprice) : undefined,
+        profit: item.profit != null ? Number(item.profit) : undefined,
+        gap_up_percentage: item.gap_up_percentage != null ? Number(item.gap_up_percentage) : undefined,
+        spike_percentage: item.spike_percentage != null ? Number(item.spike_percentage) : undefined,
+        o2c_percentage: item.o2c_percentage != null ? Number(item.o2c_percentage) : undefined,
+        volume: item.volume != null ? Number(item.volume) : undefined,
+        float: item.float != null ? Number(item.float) : undefined,
+        market_cap: item.market_cap != null ? Number(item.market_cap) : undefined,
       }));
+
+      console.log('Updated data:', updatedData); // Log the updated data
 
       const sortedData = sortResults(updatedData, sortConfig);
       setBacktestData(sortedData);
@@ -123,9 +135,12 @@ export default function Backtest_v2() {
     }
   };
 
-  const calculateProfit = (item: BacktestData) => {
-    const entryPrice = Number(item.open);
-    const exitPrice = Number(item.close);
+  const calculateProfit = (item: BacktestResult) => {
+    if (item.entryprice === undefined || item.exitprice === undefined) {
+      return undefined;
+    }
+    const entryPrice = Number(item.entryprice);
+    const exitPrice = Number(item.exitprice);
     let profit = -((exitPrice - entryPrice) / entryPrice) * 100;
 
     if (applyCommissions) {
@@ -254,6 +269,7 @@ export default function Backtest_v2() {
       switch (selectedStrategy) {
         case 'Death Candle':
           backtestResults = await runDeathCandleStrategy(data);
+          console.log('Backtest results in handleRunBacktest:', backtestResults);
           break;
         // Add more cases for other strategies here
         default:
@@ -319,10 +335,25 @@ export default function Backtest_v2() {
       if (response.ok) {
         const data = await response.json();
         const results = data.results as BacktestResult[];
-        setBacktestData(results);
-        updateChartData(results);
-        calculateStats(results);
-        // Removed the success alert message
+        console.log('Selected results in handleSelectResults:', results);
+        console.log('Selected results in handleSelectResults:', results.map(({ entryprice: entryPrice, exitprice: exitPrice }) => ({ entryPrice, exitPrice })));
+
+        // Ensure entryPrice and exitPrice are numbers
+        const processedResults = results.map(result => ({
+          ...result,
+          entryPrice: result.entryprice != null ? Number(result.entryprice) : undefined,
+          exitPrice: result.exitprice != null ? Number(result.exitprice) : undefined,
+        }));
+        
+        console.log('Processed results:', processedResults);
+        
+        setBacktestData(processedResults);
+        
+        // Log the state after setting
+        console.log('BacktestData state after setBacktestData:', backtestData);
+        
+        updateChartData(processedResults);
+        calculateStats(processedResults);
       } else {
         const errorData = await response.json();
         alert(`Error selecting results: ${errorData.message}`);
@@ -662,6 +693,7 @@ export default function Backtest_v2() {
                 </tr>
               </thead>
               <tbody>
+                {console.log('BacktestData in render:', backtestData) }
                 {backtestData && backtestData.length > 0 ? (
                   backtestData.map((item, index) => (
                     <tr key={index}>
@@ -672,21 +704,25 @@ export default function Backtest_v2() {
                       <td>{Number(item.close).toFixed(2)}</td>
                       <td>{Number(item.high).toFixed(2)}</td>
                       <td>{Number(item.low).toFixed(2)}</td>
-                      <td>{Number(item.gap_up_percentage).toFixed(2)}%</td>
-                      <td>{Number(item.spike_percentage).toFixed(2)}%</td>
-                      <td>{Number(item.o2c_percentage).toFixed(2)}%</td>
-                      <td>{Number(item.volume).toLocaleString()}</td>
-                      <td>{item.float ? Number(item.float).toLocaleString() : 'N/A'}</td>
-                      <td>{item.market_cap ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
-                      <td>{item.entryPrice ? Number(item.entryPrice).toFixed(2) : 'N/A'}</td>
-                      <td>{item.exitPrice ? Number(item.exitPrice).toFixed(2) : 'N/A'}</td>
-                      <td>{item.entryTime || 'N/A'}</td>
-                      <td className={item.profit !== undefined && Number(item.profit) >= 0 ? styles.profitPositive : styles.profitNegative}>
-                        {item.profit !== undefined && item.profit !== null
-                          ? typeof item.profit === 'number'
-                            ? item.profit.toFixed(2)
-                            : Number(item.profit).toFixed(2)
-                          : 'N/A'}%
+                      <td>{item.gap_up_percentage != null ? Number(item.gap_up_percentage).toFixed(2) : 'N/A'}%</td>
+                      <td>{item.spike_percentage != null ? Number(item.spike_percentage).toFixed(2) : 'N/A'}%</td>
+                      <td>{item.o2c_percentage != null ? Number(item.o2c_percentage).toFixed(2) : 'N/A'}%</td>
+                      <td>{item.volume != null ? item.volume.toLocaleString() : 'N/A'}</td>
+                      <td>{item.float != null ? Number(item.float).toLocaleString() : 'N/A'}</td>
+                      <td>{item.market_cap != null ? Number(  item.market_cap).toLocaleString() : 'N/A'}</td>
+                      <td>{item.entryprice != null ? Number(item.entryprice).toFixed(2) : 'Ns/A'}</td>
+                      <td>{item.exitprice != null ? Number(item.exitprice).toFixed(2) : 'N/A'}</td>
+                      <td>
+                        {(() => {
+                          try {
+                            return item.entryTime ? format(new Date(item.entryTime), 'HH:mm') : 'N/A';
+                          } catch {
+                            return 'Invalid';
+                          }
+                        })()}
+                      </td>
+                      <td className={item.profit != null && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
+                        {item.profit != null ? Number(item.profit).toFixed(2) : 'N/A'}%
                       </td>
                     </tr>
                   ))
