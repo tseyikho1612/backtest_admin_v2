@@ -50,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           convertToNumeric(result.gap_up_percentage), convertToNumeric(result.spike_percentage), 
           convertToNumeric(result.o2c_percentage),
           convertToNumeric(result.volume), convertToNumeric(result.float), convertToNumeric(result.market_cap),
-          convertToNumeric(result.entryPrice), convertToNumeric(result.exitPrice), 
+          convertToNumeric(result.entryprice), convertToNumeric(result.exitprice), 
           convertToNumeric(result.profit), result.stopLossTime
         ]
       );
