@@ -269,6 +269,7 @@ export default function Backtest_v2() {
       switch (selectedStrategy) {
         case 'Death Candle':
           backtestResults = await runDeathCandleStrategy(data);
+          console.log('Backtest results in handleRunBacktest:', backtestResults);
           break;
         // Add more cases for other strategies here
         default:
@@ -711,7 +712,15 @@ export default function Backtest_v2() {
                       <td>{item.market_cap != null ? Number(  item.market_cap).toLocaleString() : 'N/A'}</td>
                       <td>{item.entryprice != null ? Number(item.entryprice).toFixed(2) : 'Ns/A'}</td>
                       <td>{item.exitprice != null ? Number(item.exitprice).toFixed(2) : 'N/A'}</td>
-                      <td>{item.entryTime || 'N/A'}</td>
+                      <td>
+                        {(() => {
+                          try {
+                            return item.entryTime ? format(new Date(item.entryTime), 'HH:mm') : 'N/A';
+                          } catch {
+                            return 'Invalid';
+                          }
+                        })()}
+                      </td>
                       <td className={item.profit != null && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
                         {item.profit != null ? Number(item.profit).toFixed(2) : 'N/A'}%
                       </td>

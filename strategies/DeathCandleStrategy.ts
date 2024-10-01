@@ -47,7 +47,7 @@ export async function runDeathCandleStrategy(data: BacktestData[]): Promise<Back
     if (deathCandleData.deathCandlesExist) {
       const deathCandle = deathCandleData.deathCandles[0];
       const entryPrice = deathCandle.close;
-      const exitPrice = Number(item.close);
+      let exitPrice = Number(item.close);
 
       let profit: number;
       let stopLossTime: string | undefined;
@@ -55,6 +55,7 @@ export async function runDeathCandleStrategy(data: BacktestData[]): Promise<Back
       if (deathCandle.stopLossTriggered) {
         // Stop loss triggered
         profit = ((entryPrice - deathCandle.stopLossPrice) / entryPrice) * 100;
+        exitPrice = deathCandle.stopLossPrice;
         stopLossTime = deathCandle.stopLossTime;
       } else {
         // Exit at close
