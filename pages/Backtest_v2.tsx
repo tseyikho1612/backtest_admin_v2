@@ -90,7 +90,6 @@ export default function Backtest_v2() {
       }
 
       const data = await response.json();
-      console.log('Received data:', data); // Log the received data
 
       if (!data || !Array.isArray(data)) {
         console.error('Invalid data structure received:', data);
@@ -120,8 +119,6 @@ export default function Backtest_v2() {
         float: item.float != null ? Number(item.float) : undefined,
         market_cap: item.market_cap != null ? Number(item.market_cap) : undefined,
       }));
-
-      console.log('Updated data:', updatedData); // Log the updated data
 
       const sortedData = sortResults(updatedData, sortConfig);
       setBacktestData(sortedData);
@@ -186,6 +183,9 @@ export default function Backtest_v2() {
     let accumulativeProfit = 0;
     let totalProfit = 0;
     let totalLoss = 0;
+    const dailyReturns: number[] = [];
+    let previousDate = '';
+    let dailyReturn = 0;
     
     data.forEach(item => {
       const profit = Number(item.profit) || 0;
@@ -204,18 +204,41 @@ export default function Backtest_v2() {
       if (drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
       }
+
+      // Calculate daily returns for Sharpe ratio
+      const currentDate = format(new Date(item.date), 'yyyy-MM-dd');
+      if (currentDate !== previousDate) {
+        if (previousDate !== '') {
+          dailyReturns.push(dailyReturn);
+          dailyReturn = 0;
+        }
+        previousDate = currentDate;
+      }
+      dailyReturn += profit;
     });
+
+    // Add the last day's return
+    if (dailyReturn !== 0) {
+      dailyReturns.push(dailyReturn);
+    }
 
     const avgTrade = accumulativeProfit / totalTrades;
     const profitFactor = totalLoss !== 0 ? totalProfit / totalLoss : totalProfit > 0 ? Infinity : 0;
-    
+
+    // Calculate Sharpe ratio
+    const avgDailyReturn = dailyReturns.reduce((sum, return_) => sum + return_, 0) / dailyReturns.length;
+    const stdDevDailyReturn = Math.sqrt(
+      dailyReturns.reduce((sum, return_) => sum + Math.pow(return_ - avgDailyReturn, 2), 0) / dailyReturns.length
+    );
+    const sharpeRatio = (avgDailyReturn * Math.sqrt(252)) / (stdDevDailyReturn || 1); // Annualized Sharpe ratio
+
     setStats({
       totalTrades,
       percentProfitable,
       profitFactor,
       maxDrawdown,
       avgTrade,
-      sharpeRatio: 0, // You may want to implement Sharpe Ratio calculation if needed
+      sharpeRatio,
     });
   };
 
@@ -335,8 +358,6 @@ export default function Backtest_v2() {
       if (response.ok) {
         const data = await response.json();
         const results = data.results as BacktestResult[];
-        console.log('Selected results in handleSelectResults:', results);
-        console.log('Selected results in handleSelectResults:', results.map(({ entryprice: entryPrice, exitprice: exitPrice }) => ({ entryPrice, exitPrice })));
 
         // Ensure entryPrice and exitPrice are numbers
         const processedResults = results.map(result => ({
@@ -345,15 +366,18 @@ export default function Backtest_v2() {
           exitPrice: result.exitprice != null ? Number(result.exitprice) : undefined,
         }));
         
-        console.log('Processed results:', processedResults);
-        
         setBacktestData(processedResults);
-        
-        // Log the state after setting
-        console.log('BacktestData state after setBacktestData:', backtestData);
-        
         updateChartData(processedResults);
         calculateStats(processedResults);
+
+        // Debug message for exit prices
+        processedResults.forEach((result, index) => {
+          if (result.exitPrice === undefined || isNaN(result.exitPrice)) {
+            console.warn(`Row ${index + 1}: Invalid exit price for ${result.ticker} on ${result.date}`);
+          } else if (result.exitPrice === 0) {
+            console.warn(`Row ${index + 1}: Exit price is 0 for ${result.ticker} on ${result.date}`);
+          }
+        });
       } else {
         const errorData = await response.json();
         alert(`Error selecting results: ${errorData.message}`);
@@ -709,8 +733,8 @@ export default function Backtest_v2() {
                       <td>{item.o2c_percentage != null ? Number(item.o2c_percentage).toFixed(2) : 'N/A'}%</td>
                       <td>{item.volume != null ? item.volume.toLocaleString() : 'N/A'}</td>
                       <td>{item.float != null ? Number(item.float).toLocaleString() : 'N/A'}</td>
-                      <td>{item.market_cap != null ? Number(  item.market_cap).toLocaleString() : 'N/A'}</td>
-                      <td>{item.entryprice != null ? Number(item.entryprice).toFixed(2) : 'Ns/A'}</td>
+                      <td>{item.market_cap != null ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
+                      <td>{item.entryprice != null ? Number(item.entryprice).toFixed(2) : 'N/A'}</td>
                       <td>{item.exitprice != null ? Number(item.exitprice).toFixed(2) : 'N/A'}</td>
                       <td>
                         {(() => {
