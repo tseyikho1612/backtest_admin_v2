@@ -82,5 +82,7 @@ export function getTradingHours(date: Date): { start: Date; end: Date; isDST: bo
 
 export function isWithinTradingHours(date: Date): boolean {
   const { start, end } = getTradingHours(date);
-  return date >= start && date <= end;
+  const nextDay = new Date(date);
+  nextDay.setDate(date.getDate() + 1);
+  return (date >= start && date <= end) || ( nextDay >= start && nextDay <= end);
 }
