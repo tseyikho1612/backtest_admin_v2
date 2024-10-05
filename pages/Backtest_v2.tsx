@@ -5,7 +5,7 @@ import Navigation from '../components/Navigation';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
-import { format, parse } from 'date-fns';
+import { format, parse, isValid } from 'date-fns';
 import { Trash2, Save, Play, List, Download } from 'react-feather';
 import { runDeathCandleStrategy, BacktestData, BacktestResult } from '../strategies/DeathCandleStrategy';
 
@@ -358,14 +358,37 @@ export default function Backtest_v2() {
       if (response.ok) {
         const data = await response.json();
         const results = data.results as BacktestResult[];
-
-        // Ensure entryPrice and exitPrice are numbers
-        const processedResults = results.map(result => ({
-          ...result,
-          entryPrice: result.entryprice != null ? Number(result.entryprice) : undefined,
-          exitPrice: result.exitprice != null ? Number(result.exitprice) : undefined,
-        }));
         
+        console.log('Raw results:', results); // Debug: Log raw results
+
+        const processedResults = results.map(result => {
+          console.log('Processing result:', result); // Debug: Log each result being processed
+          return {
+            ...result,
+            entryPrice: result.entryprice != null ? Number(result.entryprice) : undefined,
+            exitPrice: result.exitprice != null ? Number(result.exitprice) : undefined,
+            entryTime: result.entryTime, // Keep the original entryTime
+            formattedEntryTime: result.entryTime ? (() => {
+              console.log('Raw entryTime:', result.entryTime); // Debug: Log raw entryTime
+              try {
+                // Parse the time string directly using date-fns
+                const parsedTime = parse(result.entryTime, 'HH:mm:ss', new Date());
+                console.log('Parsed time:', parsedTime); // Debug: Log parsed time
+                if (!isValid(parsedTime)) {
+                  console.error('Invalid parsed time:', parsedTime);
+                  return 'Invalid';
+                }
+                return format(parsedTime, 'HH:mm');
+              } catch (error) {
+                console.error('Error formatting entryTime:', error, 'Value:', result.entryTime);
+                return 'Invalid';
+              }
+            })() : 'N/A',
+          };
+        });
+
+        console.log('Processed results:', processedResults); // Debug: Log processed results
+
         setBacktestData(processedResults);
         updateChartData(processedResults);
         calculateStats(processedResults);
@@ -738,11 +761,11 @@ export default function Backtest_v2() {
                       <td>{item.exitprice != null ? Number(item.exitprice).toFixed(2) : 'N/A'}</td>
                       <td>
                         {(() => {
-                          try {
-                            return item.entryTime ? format(new Date(item.entryTime), 'HH:mm') : 'N/A';
-                          } catch {
-                            return 'Invalid';
-                          }
+                          console.log('Rendering entryTime:', item.entryTime); // Debug: Log original entryTime
+                          console.log('Rendering formattedEntryTime:', item.formattedEntryTime); // Debug: Log formatted entryTime
+                          if (!item.entryTime) return 'N/A';
+                          if (item.formattedEntryTime === 'Invalid') return 'Invalid';
+                          return item.formattedEntryTime || item.entryTime;
                         })()}
                       </td>
                       <td className={item.profit != null && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
