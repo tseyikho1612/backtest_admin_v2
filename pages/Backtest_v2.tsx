@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import styles from '../styles/Home.module.css';
 import Navigation from '../components/Navigation';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
-import { format, parse, isValid } from 'date-fns';
-import { Trash2, Save, Play, List, Download } from 'react-feather';
+import { format, parse, isValid, compareAsc } from 'date-fns';
+import { Trash2, Save, Play, List, Download, ChevronUp, ChevronDown } from 'react-feather';
 import { runDeathCandleStrategy, BacktestData, BacktestResult } from '../strategies/DeathCandleStrategy';
 import * as XLSX from 'xlsx';
 
@@ -255,19 +255,51 @@ export default function Backtest_v2() {
     setCommissions(e.target.value);
   };
 
-  const handleSort = (key: keyof BacktestData) => {
-    // ... (same as in Backtest.tsx)
-  };
-
-  const sortResults = (data: BacktestData[], config: SortConfig): BacktestData[] => {
-    // ... (implementation remains the same, just ensure it returns BacktestData[])
-  };
-
-  const getSortIndicator = (key: keyof BacktestData): string => {
-    if (sortConfig.key === key) {
-      return sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+  const handleSort = (key: keyof BacktestResult) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
     }
-    return '';
+    setSortConfig({ key, direction });
+  };
+
+  const sortedBacktestData = React.useMemo(() => {
+    let sortableItems = [...backtestData];
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key] === null || a[sortConfig.key] === undefined) return 1;
+        if (b[sortConfig.key] === null || b[sortConfig.key] === undefined) return -1;
+        
+        if (sortConfig.key === 'date') {
+          return compareAsc(new Date(a[sortConfig.key] as string), new Date(b[sortConfig.key] as string));
+        }
+        
+        if (typeof a[sortConfig.key] === 'number' && typeof b[sortConfig.key] === 'number') {
+          return (a[sortConfig.key] as number) - (b[sortConfig.key] as number);
+        }
+        
+        if (typeof a[sortConfig.key] === 'string' && typeof b[sortConfig.key] === 'string') {
+          return (a[sortConfig.key] as string).localeCompare(b[sortConfig.key] as string);
+        }
+        
+        return 0;
+      });
+    }
+    if (sortConfig.direction === 'descending') {
+      sortableItems.reverse();
+    }
+    return sortableItems;
+  }, [backtestData, sortConfig]);
+
+  const getSortIndicator = (key: keyof BacktestResult) => {
+    if (sortConfig.key === key) {
+      return (
+        <span className={styles.sortIndicator}>
+          {sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </span>
+      );
+    }
+    return null;
   };
 
   const handleStrategyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -694,92 +726,85 @@ export default function Backtest_v2() {
                 <tr>
                   <th className={styles.thLeftAlign}>Row</th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('date')}>
-                    Date{getSortIndicator('date')}
+                    Date {getSortIndicator('date')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('ticker')}>
-                    Ticker{getSortIndicator('ticker')}
+                    Ticker {getSortIndicator('ticker')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('open')}>
-                    Open{getSortIndicator('open')}
+                    Open {getSortIndicator('open')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('close')}>
-                    Close{getSortIndicator('close')}
+                    Close {getSortIndicator('close')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('high')}>
-                    High{getSortIndicator('high')}
+                    High {getSortIndicator('high')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('low')}>
-                    Low{getSortIndicator('low')}
+                    Low {getSortIndicator('low')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('gap_up_percentage')}>
-                    Gap Up %{getSortIndicator('gap_up_percentage')}
+                    Gap Up % {getSortIndicator('gap_up_percentage')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('spike_percentage')}>
-                    Spike %{getSortIndicator('spike_percentage')}
+                    Spike % {getSortIndicator('spike_percentage')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('o2c_percentage')}>
-                    O2C %{getSortIndicator('o2c_percentage')}
+                    O2C % {getSortIndicator('o2c_percentage')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('volume')}>
-                    Volume{getSortIndicator('volume')}
+                    Volume {getSortIndicator('volume')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('float')}>
-                    Float{getSortIndicator('float')}
+                    Float {getSortIndicator('float')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('market_cap')}>
-                    Market Cap{getSortIndicator('market_cap')}
+                    Market Cap {getSortIndicator('market_cap')}
                   </th>
-                  <th className={styles.thLeftAlign} onClick={() => handleSort('entryPrice')}>
-                    Entry Price{getSortIndicator('entryPrice')}
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('entryprice')}>
+                    Entry Price {getSortIndicator('entryprice')}
                   </th>
-                  <th className={styles.thLeftAlign} onClick={() => handleSort('exitPrice')}>
-                    Exit Price{getSortIndicator('exitPrice')}
+                  <th className={styles.thLeftAlign} onClick={() => handleSort('exitprice')}>
+                    Exit Price {getSortIndicator('exitprice')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('entryTime')}>
-                    Entry Time{getSortIndicator('entryTime')}
+                    Entry Time {getSortIndicator('entryTime')}
                   </th>
                   <th className={styles.thLeftAlign} onClick={() => handleSort('profit')}>
-                    Profit{getSortIndicator('profit')}
+                    Profit {getSortIndicator('profit')}
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {console.log('BacktestData in render:', backtestData) }
-                {backtestData && backtestData.length > 0 ? (
-                  backtestData.map((item, index) => (
-                    <tr key={index}>
-                      <td>{index + 1}</td>
-                      <td>{format(new Date(item.date), 'dd-MM-yy')}</td>
-                      <td>{item.ticker}</td>
-                      <td>{Number(item.open).toFixed(2)}</td>
-                      <td>{Number(item.close).toFixed(2)}</td>
-                      <td>{Number(item.high).toFixed(2)}</td>
-                      <td>{Number(item.low).toFixed(2)}</td>
-                      <td>{item.gap_up_percentage != null ? Number(item.gap_up_percentage).toFixed(2) : 'N/A'}%</td>
-                      <td>{item.spike_percentage != null ? Number(item.spike_percentage).toFixed(2) : 'N/A'}%</td>
-                      <td>{item.o2c_percentage != null ? Number(item.o2c_percentage).toFixed(2) : 'N/A'}%</td>
-                      <td>{item.volume != null ? item.volume.toLocaleString() : 'N/A'}</td>
-                      <td>{item.float != null ? Number(item.float).toLocaleString() : 'N/A'}</td>
-                      <td>{item.market_cap != null ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
-                      <td>{item.entryprice != null ? Number(item.entryprice).toFixed(2) : 'N/A'}</td>
-                      <td>{item.exitprice != null ? Number(item.exitprice).toFixed(2) : 'N/A'}</td>
-                      <td>
-                        {(() => {
-                          if (!item.entryTime && !item.entrytime) return 'N/A';
-                          if (item.formattedEntryTime === 'Invalid') return 'Invalid';
-                          return item.formattedEntryTime || item.entryTime || item.entrytime;
-                        })()}
-                      </td>
-                      <td className={item.profit != null && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
-                        {item.profit != null ? Number(item.profit).toFixed(2) : 'N/A'}%
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={17}>No data available</td>
+                {sortedBacktestData.map((item, index) => (
+                  <tr key={index}>
+                    <td>{index + 1}</td>
+                    <td>{format(new Date(item.date), 'dd-MM-yy')}</td>
+                    <td>{item.ticker}</td>
+                    <td>{Number(item.open).toFixed(2)}</td>
+                    <td>{Number(item.close).toFixed(2)}</td>
+                    <td>{Number(item.high).toFixed(2)}</td>
+                    <td>{Number(item.low).toFixed(2)}</td>
+                    <td>{item.gap_up_percentage != null ? Number(item.gap_up_percentage).toFixed(2) : 'N/A'}%</td>
+                    <td>{item.spike_percentage != null ? Number(item.spike_percentage).toFixed(2) : 'N/A'}%</td>
+                    <td>{item.o2c_percentage != null ? Number(item.o2c_percentage).toFixed(2) : 'N/A'}%</td>
+                    <td>{item.volume != null ? item.volume.toLocaleString() : 'N/A'}</td>
+                    <td>{item.float != null ? Number(item.float).toLocaleString() : 'N/A'}</td>
+                    <td>{item.market_cap != null ? Number(item.market_cap).toLocaleString() : 'N/A'}</td>
+                    <td>{item.entryprice != null ? Number(item.entryprice).toFixed(2) : 'N/A'}</td>
+                    <td>{item.exitprice != null ? Number(item.exitprice).toFixed(2) : 'N/A'}</td>
+                    <td>
+                      {(() => {
+                        if (!item.entryTime && !item.entrytime) return 'N/A';
+                        if (item.formattedEntryTime === 'Invalid') return 'Invalid';
+                        return item.formattedEntryTime || item.entryTime || item.entrytime;
+                      })()}
+                    </td>
+                    <td className={item.profit != null && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
+                      {item.profit != null ? Number(item.profit).toFixed(2) : 'N/A'}%
+                    </td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
