@@ -41,8 +41,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `INSERT INTO backtest_v2_results (
           datasetId, strategyName, ticker, date, open, close, high, low,
           gap_up_percentage, spike_percentage, o2c_percentage, volume, float, market_cap,
-          entryPrice, exitPrice, profit, stopLossTime
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+          entryPrice, exitPrice, profit, stopLossTime, entrytime
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
         [
           datasetId, strategyName, result.ticker, result.date,
           convertToNumeric(result.open), convertToNumeric(result.close), 
@@ -51,7 +51,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           convertToNumeric(result.o2c_percentage),
           convertToNumeric(result.volume), convertToNumeric(result.float), convertToNumeric(result.market_cap),
           convertToNumeric(result.entryprice), convertToNumeric(result.exitprice), 
-          convertToNumeric(result.profit), result.stopLossTime
+          convertToNumeric(result.profit), result.stopLossTime,
+          result.entryTime // Add this line to include entrytime
         ]
       );
       insertedCount++;

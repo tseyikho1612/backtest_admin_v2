@@ -28,6 +28,7 @@ export interface BacktestResult extends BacktestData {
   profit?: number;
   stopLossTime?: string;
   entryTime?: string;
+  entrytime?: string;
   gap_up_percentage?: number;
   spike_percentage?: number;
   o2c_percentage?: number;

@@ -5,9 +5,10 @@ import Navigation from '../components/Navigation';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { ChartData } from 'chart.js';
-import { format, parse } from 'date-fns';
+import { format, parse, isValid } from 'date-fns';
 import { Trash2, Save, Play, List, Download } from 'react-feather';
 import { runDeathCandleStrategy, BacktestData, BacktestResult } from '../strategies/DeathCandleStrategy';
+import * as XLSX from 'xlsx';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -358,26 +359,31 @@ export default function Backtest_v2() {
       if (response.ok) {
         const data = await response.json();
         const results = data.results as BacktestResult[];
-
-        // Ensure entryPrice and exitPrice are numbers
-        const processedResults = results.map(result => ({
-          ...result,
-          entryPrice: result.entryprice != null ? Number(result.entryprice) : undefined,
-          exitPrice: result.exitprice != null ? Number(result.exitprice) : undefined,
-        }));
         
+        const processedResults = results.map(result => {
+          return {
+            ...result,
+            entryPrice: result.entryprice != null ? Number(result.entryprice) : undefined,
+            exitPrice: result.exitprice != null ? Number(result.exitprice) : undefined,
+            entryTime: result.entrytime || result.entryTime,
+            formattedEntryTime: (result.entrytime || result.entryTime) ? (() => {
+              const timeToFormat = result.entrytime || result.entryTime;
+              try {
+                const parsedTime = parse(timeToFormat, 'HH:mm:ss', new Date());
+                if (!isValid(parsedTime)) {
+                  return 'Invalid';
+                }
+                return format(parsedTime, 'HH:mm');
+              } catch (error) {
+                return 'Invalid';
+              }
+            })() : 'N/A',
+          };
+        });
+
         setBacktestData(processedResults);
         updateChartData(processedResults);
         calculateStats(processedResults);
-
-        // Debug message for exit prices
-        processedResults.forEach((result, index) => {
-          if (result.exitPrice === undefined || isNaN(result.exitPrice)) {
-            console.warn(`Row ${index + 1}: Invalid exit price for ${result.ticker} on ${result.date}`);
-          } else if (result.exitPrice === 0) {
-            console.warn(`Row ${index + 1}: Exit price is 0 for ${result.ticker} on ${result.date}`);
-          }
-        });
       } else {
         const errorData = await response.json();
         alert(`Error selecting results: ${errorData.message}`);
@@ -486,6 +492,20 @@ export default function Backtest_v2() {
       setIsLoading(false);
     }
   }
+
+  const handleDownloadExcel = () => {
+    if (backtestData.length === 0) {
+      alert('No data to download');
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(backtestData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Backtest Results');
+
+    const fileName = `${selectedStrategy}_${selectedDataSet}_${format(new Date(), 'yyyyMMddHHmmss')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
 
   return (
     <div className={styles.container}>
@@ -662,6 +682,13 @@ export default function Backtest_v2() {
 
         <div className={styles.backtestResultsContainer}>
           <div className={styles.tableContainer}>
+            <div className={styles.tableHeader}>
+              <h2>Backtest Results</h2>
+              <button onClick={handleDownloadExcel} className={styles.downloadButton}>
+                <Download size={16} />
+                Download Excel
+              </button>
+            </div>
             <table id="backtestResultsTable" className={styles.table}>
               <thead>
                 <tr>
@@ -738,11 +765,9 @@ export default function Backtest_v2() {
                       <td>{item.exitprice != null ? Number(item.exitprice).toFixed(2) : 'N/A'}</td>
                       <td>
                         {(() => {
-                          try {
-                            return item.entryTime ? format(new Date(item.entryTime), 'HH:mm') : 'N/A';
-                          } catch {
-                            return 'Invalid';
-                          }
+                          if (!item.entryTime && !item.entrytime) return 'N/A';
+                          if (item.formattedEntryTime === 'Invalid') return 'Invalid';
+                          return item.formattedEntryTime || item.entryTime || item.entrytime;
                         })()}
                       </td>
                       <td className={item.profit != null && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>
