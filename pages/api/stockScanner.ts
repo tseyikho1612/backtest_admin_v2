@@ -39,8 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       try {
         const [currentDayData, previousDayData] = await Promise.all([
-          polygonClient.stocks.aggregatesGroupedDaily(formattedDate, { adjusted: 'true' }),
-          polygonClient.stocks.aggregatesGroupedDaily(formattedPreviousDate, { adjusted: 'true' }),
+          polygonClient.stocks.aggregatesGroupedDaily(formattedDate, { adjusted: 'false' }),
+          polygonClient.stocks.aggregatesGroupedDaily(formattedPreviousDate, { adjusted: 'false' }),
         ]);
 
         if (!Array.isArray(currentDayData.results) || !Array.isArray(previousDayData.results)) {

@@ -47,6 +47,9 @@ export async function runDeathCandleStrategy(data: BacktestData[]): Promise<Back
 
     if (deathCandleData.deathCandlesExist) {
       const deathCandle = deathCandleData.deathCandles[0];
+      if (deathCandle.open < 1) {
+        continue;
+      }
       const entryPrice = deathCandle.close;
       let exitPrice = Number(item.close);
 
