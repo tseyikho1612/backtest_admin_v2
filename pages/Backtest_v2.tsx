@@ -8,6 +8,7 @@ import { ChartData } from 'chart.js';
 import { format, parse, isValid } from 'date-fns';
 import { Trash2, Save, Play, List, Download } from 'react-feather';
 import { runDeathCandleStrategy, BacktestData, BacktestResult } from '../strategies/DeathCandleStrategy';
+import * as XLSX from 'xlsx';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -359,48 +360,30 @@ export default function Backtest_v2() {
         const data = await response.json();
         const results = data.results as BacktestResult[];
         
-        console.log('Raw results:', results); // Debug: Log raw results
-
         const processedResults = results.map(result => {
-          console.log('Processing result:', result); // Debug: Log each result being processed
           return {
             ...result,
             entryPrice: result.entryprice != null ? Number(result.entryprice) : undefined,
             exitPrice: result.exitprice != null ? Number(result.exitprice) : undefined,
-            entryTime: result.entryTime, // Keep the original entryTime
-            formattedEntryTime: result.entryTime ? (() => {
-              console.log('Raw entryTime:', result.entryTime); // Debug: Log raw entryTime
+            entryTime: result.entrytime || result.entryTime,
+            formattedEntryTime: (result.entrytime || result.entryTime) ? (() => {
+              const timeToFormat = result.entrytime || result.entryTime;
               try {
-                // Parse the time string directly using date-fns
-                const parsedTime = parse(result.entryTime, 'HH:mm:ss', new Date());
-                console.log('Parsed time:', parsedTime); // Debug: Log parsed time
+                const parsedTime = parse(timeToFormat, 'HH:mm:ss', new Date());
                 if (!isValid(parsedTime)) {
-                  console.error('Invalid parsed time:', parsedTime);
                   return 'Invalid';
                 }
                 return format(parsedTime, 'HH:mm');
               } catch (error) {
-                console.error('Error formatting entryTime:', error, 'Value:', result.entryTime);
                 return 'Invalid';
               }
             })() : 'N/A',
           };
         });
 
-        console.log('Processed results:', processedResults); // Debug: Log processed results
-
         setBacktestData(processedResults);
         updateChartData(processedResults);
         calculateStats(processedResults);
-
-        // Debug message for exit prices
-        processedResults.forEach((result, index) => {
-          if (result.exitPrice === undefined || isNaN(result.exitPrice)) {
-            console.warn(`Row ${index + 1}: Invalid exit price for ${result.ticker} on ${result.date}`);
-          } else if (result.exitPrice === 0) {
-            console.warn(`Row ${index + 1}: Exit price is 0 for ${result.ticker} on ${result.date}`);
-          }
-        });
       } else {
         const errorData = await response.json();
         alert(`Error selecting results: ${errorData.message}`);
@@ -509,6 +492,20 @@ export default function Backtest_v2() {
       setIsLoading(false);
     }
   }
+
+  const handleDownloadExcel = () => {
+    if (backtestData.length === 0) {
+      alert('No data to download');
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(backtestData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Backtest Results');
+
+    const fileName = `${selectedStrategy}_${selectedDataSet}_${format(new Date(), 'yyyyMMddHHmmss')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
 
   return (
     <div className={styles.container}>
@@ -685,6 +682,13 @@ export default function Backtest_v2() {
 
         <div className={styles.backtestResultsContainer}>
           <div className={styles.tableContainer}>
+            <div className={styles.tableHeader}>
+              <h2>Backtest Results</h2>
+              <button onClick={handleDownloadExcel} className={styles.downloadButton}>
+                <Download size={16} />
+                Download Excel
+              </button>
+            </div>
             <table id="backtestResultsTable" className={styles.table}>
               <thead>
                 <tr>
@@ -761,11 +765,9 @@ export default function Backtest_v2() {
                       <td>{item.exitprice != null ? Number(item.exitprice).toFixed(2) : 'N/A'}</td>
                       <td>
                         {(() => {
-                          console.log('Rendering entryTime:', item.entryTime); // Debug: Log original entryTime
-                          console.log('Rendering formattedEntryTime:', item.formattedEntryTime); // Debug: Log formatted entryTime
-                          if (!item.entryTime) return 'N/A';
+                          if (!item.entryTime && !item.entrytime) return 'N/A';
                           if (item.formattedEntryTime === 'Invalid') return 'Invalid';
-                          return item.formattedEntryTime || item.entryTime;
+                          return item.formattedEntryTime || item.entryTime || item.entrytime;
                         })()}
                       </td>
                       <td className={item.profit != null && item.profit >= 0 ? styles.profitPositive : styles.profitNegative}>

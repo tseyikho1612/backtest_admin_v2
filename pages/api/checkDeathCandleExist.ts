@@ -61,6 +61,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let previousTwoCandlesMiddlePrice = 0;
       let isDeathCandle = false;
 
+      // 10 minutes after market open
+      // previous two candles change > 0
+      // current candle drop half of the previous two candles change
       if (candleTime >= addMinutes(marketOpenTime, 10) && index >= 2) {
         const prevCandle1 = response.results?.[index - 1];
         const prevCandle2 = response.results?.[index - 2];
@@ -76,6 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                           previousTwoCandlesMiddlePrice >= candle.l ;
         }
       } else {
+        // Red Candle and (open to close percentage < -5)
         isDeathCandle = candle.c < candle.o && openToClosePercentage < -5;
       }
 
